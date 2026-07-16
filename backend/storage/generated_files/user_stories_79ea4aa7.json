@@ -1,0 +1,14 @@
+[
+  {
+    "story_id": "7325c5d0-a13c-4250-8208-5e43729225e7",
+    "title": "Validate journey for https://v17.angular.io/guide/lifecycle-hooks",
+    "description": "As a user, I want the discovered journey covered so the workflow is reliable.",
+    "acceptance_criteria": [
+      "Journey steps are documented",
+      "Critical path is testable"
+    ],
+    "journey_id": "36a01334-cfaf-4e42-a7cd-0157ec3f3a65",
+    "priority": "High",
+    "status": "Draft"
+  }
+]

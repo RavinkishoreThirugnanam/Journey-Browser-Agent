@@ -1,0 +1,297 @@
+[
+  {
+    "story_id": "fa453690-8e8d-4681-b3f5-03fb050c1491",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Fix: WSLRegisterDistribution Failed with Error: 0x8007019e",
+    "description": "As a user, I want the discovered journey for https://appuals.com/wslregisterdistribution-failed-with-error-0x8007019e/ to be converted into a Jira-ready story so that the QA team can validate the flow and derive automation assets from the real navigation path.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://appuals.com/wslregisterdistribution-failed-with-error-0x8007019e/ and allow the user to move through the discovered pages without losing the captured sequence or source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Any discovered CTA, link, or navigation action on Fix: WSLRegisterDistribution Failed with Error: 0x8007019e should resolve to the expected same-origin destination and record the resulting page transition in the journey output across 3 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should display the extracted steps and event log in a readable, scrollable format with page title, action, event, depth, and description visible for review.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The UI should surface the journey summary, step count, and event count clearly, and if any input controls are discovered the detail view should retain their labels and metadata such as max-length or placeholder text when available. The longest captured UI text reference is 58 characters long.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "6e501734-fca5-4670-a9fd-a34661ae4c9d",
+    "journey_id": "c27997b5-874a-4e59-8cdf-fe850eb914bf",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Fix: WSLRegisterDistribution Failed with Error: 0x8007019e",
+    "description": "As a user, I want the discovered journey for https://appuals.com/wslregisterdistribution-failed-with-error-0x8007019e/ to be converted into a Jira-ready story so that the QA team can validate the flow and derive automation assets from the real navigation path.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://appuals.com/wslregisterdistribution-failed-with-error-0x8007019e/ and allow the user to move through the discovered pages without losing the captured sequence or source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Any discovered CTA, link, or navigation action on Fix: WSLRegisterDistribution Failed with Error: 0x8007019e should resolve to the expected same-origin destination and record the resulting page transition in the journey output across 3 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should display the extracted steps and event log in a readable, scrollable format with page title, action, event, depth, and description visible for review.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The UI should surface the journey summary, step count, and event count clearly, and if any input controls are discovered the detail view should retain their labels and metadata such as max-length or placeholder text when available. The longest captured UI text reference is 58 characters long.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "f2abd5bd-cf08-429b-a8ac-abbbb5c97d9d",
+    "journey_id": "0ef903af-5517-4db3-9bab-e94030eead74",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 \u200eGoogle Gemini",
+    "description": "As a user, I want the discovered journey for https://gemini.google.com/app?hl=en-IN to be converted into a Jira-ready story so that the QA team can validate the flow and derive automation assets from the real navigation path.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://gemini.google.com/app?hl=en-IN and allow the user to move through the discovered pages without losing the captured sequence or source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Any discovered CTA, link, or navigation action on \u200eGoogle Gemini should resolve to the expected same-origin destination and record the resulting page transition in the journey output across 3 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should display the extracted steps and event log in a readable, scrollable format with page title, action, event, depth, and description visible for review.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The UI should surface the journey summary, step count, and event count clearly, and if any input controls are discovered the detail view should retain their labels and metadata such as max-length or placeholder text when available. The longest captured UI text reference is 176 characters long.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "ebde45ce-11c3-4caa-9e53-5c40c7b78b59",
+    "journey_id": "85e286b0-283d-454b-9c76-b77c7167dbee",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Disneyworld.Disney.Go.Com - Discovered from base URL",
+    "description": "As a user, I want the discovered journey for the application to be converted into a Jira-ready story so that the QA team can validate the flow and derive automation assets from the real navigation path.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from  and allow the user to move through the discovered pages without losing the captured sequence or source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Any discovered CTA, link, or navigation action on Journey should resolve to the expected same-origin destination and record the resulting page transition in the journey output across 6 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should display the extracted steps and event log in a readable, scrollable format with page title, action, event, depth, and description visible for review.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The UI should surface the journey summary, step count, and event count clearly, and if any input controls are discovered the detail view should retain their labels and metadata such as max-length or placeholder text when available.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "c61dfa6a-5a91-454c-bcc8-c86aa2f50a18",
+    "journey_id": "2e170144-73da-468b-975c-52ecec7242eb",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Anthropic.Skilljar.Com - Discovered from base URL",
+    "description": "As a user, I want the discovered journey for the application to be converted into a Jira-ready story so that the QA team can validate the flow and derive automation assets from the real navigation path.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from  and allow the user to move through the discovered pages without losing the captured sequence or source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Any discovered CTA, link, or navigation action on Journey should resolve to the expected same-origin destination and record the resulting page transition in the journey output across 5 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should display the extracted steps and event log in a readable, scrollable format with page title, action, event, depth, and description visible for review.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The UI should surface the journey summary, step count, and event count clearly, and if any input controls are discovered the detail view should retain their labels and metadata such as max-length or placeholder text when available.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "42abdfb2-42ba-4ee5-aca3-4f7a730a0cc3",
+    "journey_id": "45c394b6-7dbf-4ad2-a048-3f0b1fa64c08",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Fapl.Greythr.Com - Discovered from base URL",
+    "description": "As a user, I want the discovered journey for the application to be converted into a Jira-ready story so that the QA team can validate the flow and derive automation assets from the real navigation path.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from  and allow the user to move through the discovered pages without losing the captured sequence or source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Any discovered CTA, link, or navigation action on Journey should resolve to the expected same-origin destination and record the resulting page transition in the journey output across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should display the extracted steps and event log in a readable, scrollable format with page title, action, event, depth, and description visible for review.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The UI should surface the journey summary, step count, and event count clearly, and if any input controls are discovered the detail view should retain their labels and metadata such as max-length or placeholder text when available.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "76708e55-2546-4cd9-bf54-72226bc4c4f0",
+    "journey_id": "2e170144-73da-468b-975c-52ecec7242eb",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Anthropic.Skilljar.Com - Discovered from base URL",
+    "description": "As a user, I want the discovered journey for the application to be converted into a Jira-ready story so that the QA team can validate the flow and derive automation assets from the real navigation path.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from  and allow the user to move through the discovered pages without losing the captured sequence or source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Any discovered CTA, link, or navigation action on Journey should resolve to the expected same-origin destination and record the resulting page transition in the journey output across 5 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should display the extracted steps and event log in a readable, scrollable format with page title, action, event, depth, and description visible for review.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The UI should surface the journey summary, step count, and event count clearly, and if any input controls are discovered the detail view should retain their labels and metadata such as max-length or placeholder text when available.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "6ccbe155-2742-40c5-9a0c-8de212f56ea6",
+    "journey_id": "7dc41851-8bad-4883-9f17-d52c1f38f77b",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Www.Adobe.Com - Discovered from base URL",
+    "description": "As a user, I want the discovered journey for the application to be converted into a Jira-ready story so that the QA team can validate the flow and derive automation assets from the real navigation path.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from  and allow the user to move through the discovered pages without losing the captured sequence or source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Any discovered CTA, link, or navigation action on Journey should resolve to the expected same-origin destination and record the resulting page transition in the journey output across 2 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should display the extracted steps and event log in a readable, scrollable format with page title, action, event, depth, and description visible for review.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The UI should surface the journey summary, step count, and event count clearly, and if any input controls are discovered the detail view should retain their labels and metadata such as max-length or placeholder text when available.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  }
+]

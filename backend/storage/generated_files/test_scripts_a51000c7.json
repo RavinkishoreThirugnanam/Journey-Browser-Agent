@@ -1,0 +1,8 @@
+[
+  {
+    "script_id": "1d519c33-ffa6-428f-b1ed-c58b7bab8752",
+    "test_case_id": "5947671b-5a09-4310-9e6d-9d5c77012308",
+    "feature_file": "Feature: Test journey 0ef903af-5517-4db3-9bab-e94030eead74\n  Scenario: Execute journey\n    Given the application is reachable\n    When the user follows the journey\n    Then the expected results are observed\n",
+    "javascript_file": "describe('Test journey 0ef903af-5517-4db3-9bab-e94030eead74', () => { test('journey flow', async () => { /* mock automation */ }); });"
+  }
+]
