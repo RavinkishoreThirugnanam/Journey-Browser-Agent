@@ -15,27 +15,27 @@ steps:
     args:
       - build
       - -t
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/backend:$SHORT_SHA
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/backend:$BUILD_ID
       - ./backend
   - id: build-frontend
     name: gcr.io/cloud-builders/docker
     args:
       - build
       - -t
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/frontend:$SHORT_SHA
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/frontend:$BUILD_ID
       - ./frontend
   - id: push-backend
     name: gcr.io/cloud-builders/docker
     waitFor: [build-backend]
     args:
       - push
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/backend:$SHORT_SHA
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/backend:$BUILD_ID
   - id: push-frontend
     name: gcr.io/cloud-builders/docker
     waitFor: [build-frontend]
     args:
       - push
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/frontend:$SHORT_SHA
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/frontend:$BUILD_ID
   - id: deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     waitFor: [push-backend, push-frontend]
@@ -45,8 +45,8 @@ steps:
       - |
         gcloud container clusters get-credentials "${_CLUSTER_NAME}" --region "${_REGION}" --project "$PROJECT_ID"
         kubectl apply -f k8s/namespace.yaml
-        sed -e "s|BACKEND_IMAGE|${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/backend:$SHORT_SHA|g" -e "s|FRONTEND_HOST|${_FRONTEND_HOST}|g" k8s/backend.yaml | kubectl apply -f -
-        sed -e "s|FRONTEND_IMAGE|${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/frontend:$SHORT_SHA|g" k8s/frontend.yaml | kubectl apply -f -
+        sed -e "s|BACKEND_IMAGE|${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/backend:$BUILD_ID|g" -e "s|FRONTEND_HOST|${_FRONTEND_HOST}|g" k8s/backend.yaml | kubectl apply -f -
+        sed -e "s|FRONTEND_IMAGE|${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/frontend:$BUILD_ID|g" k8s/frontend.yaml | kubectl apply -f -
         if [[ -n "${_FRONTEND_HOST}" ]]; then
           sed "s|FRONTEND_HOST|${_FRONTEND_HOST}|g" k8s/managed-certificate.yaml | kubectl apply -f -
           sed "s|FRONTEND_HOST|${_FRONTEND_HOST}|g" k8s/ingress.yaml | kubectl apply -f -
@@ -55,5 +55,5 @@ steps:
         kubectl -n "${_NAMESPACE}" rollout status deployment/journey-frontend --timeout=5m
 
 images:
-  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/backend:$SHORT_SHA
-  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/frontend:$SHORT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/backend:$BUILD_ID
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/frontend:$BUILD_ID
