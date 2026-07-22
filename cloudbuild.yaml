@@ -37,12 +37,15 @@ steps:
       - push
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/frontend:$BUILD_ID
   - id: deploy
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
     waitFor: [push-backend, push-frontend]
     entrypoint: bash
     args:
       - -ceu
       - |
+        apt-get update
+        apt-get install -y kubectl google-cloud-sdk-gke-gcloud-auth-plugin
+        export USE_GKE_GCLOUD_AUTH_PLUGIN=True
         gcloud container clusters get-credentials "${_CLUSTER_NAME}" --region "${_REGION}" --project "$PROJECT_ID"
         kubectl apply -f k8s/namespace.yaml
         sed -e "s|BACKEND_IMAGE|${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/backend:$BUILD_ID|g" -e "s|FRONTEND_HOST|${_FRONTEND_HOST}|g" k8s/backend.yaml | kubectl apply -f -
