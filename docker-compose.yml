@@ -1,30 +1,23 @@
 services:
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
+    build: { context: ./backend, dockerfile: Dockerfile }
+    ports: ["8000:8000"]
     env_file:
-      - ./backend/.env
-    volumes:
-      - ./backend/storage:/app/storage
-    networks:
-      - app-network
-
+      - path: ./backend/.env
+        required: false
+    volumes: ["./backend/storage:/app/storage"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks: [app-network]
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "5173:5173"
-    env_file:
-      - ./frontend/.env
+    build: { context: ./frontend, dockerfile: Dockerfile }
+    ports: ["5173:8080"]
     depends_on:
-      - backend
-    networks:
-      - app-network
-
+      backend: { condition: service_healthy }
+    networks: [app-network]
 networks:
   app-network:
     driver: bridge

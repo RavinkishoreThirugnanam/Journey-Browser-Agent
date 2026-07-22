@@ -1,0 +1,8 @@
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: journey-browser-cert
+  namespace: journey-browser
+spec:
+  domains:
+    - FRONTEND_HOST

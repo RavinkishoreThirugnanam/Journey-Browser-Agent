@@ -1,0 +1,59 @@
+substitutions:
+  _REGION: asia-south1
+  _CLUSTER_NAME: esp-aep-cluster
+  _REPOSITORY: journey-browser
+  _FRONTEND_HOST: ""
+  _NAMESPACE: journey-browser
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  substitutionOption: ALLOW_LOOSE
+
+steps:
+  - id: build-backend
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/backend:$SHORT_SHA
+      - ./backend
+  - id: build-frontend
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/frontend:$SHORT_SHA
+      - ./frontend
+  - id: push-backend
+    name: gcr.io/cloud-builders/docker
+    waitFor: [build-backend]
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/backend:$SHORT_SHA
+  - id: push-frontend
+    name: gcr.io/cloud-builders/docker
+    waitFor: [build-frontend]
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/frontend:$SHORT_SHA
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    waitFor: [push-backend, push-frontend]
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        gcloud container clusters get-credentials "${_CLUSTER_NAME}" --region "${_REGION}" --project "$PROJECT_ID"
+        kubectl apply -f k8s/namespace.yaml
+        sed -e "s|BACKEND_IMAGE|${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/backend:$SHORT_SHA|g" -e "s|FRONTEND_HOST|${_FRONTEND_HOST}|g" k8s/backend.yaml | kubectl apply -f -
+        sed -e "s|FRONTEND_IMAGE|${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/frontend:$SHORT_SHA|g" k8s/frontend.yaml | kubectl apply -f -
+        if [[ -n "${_FRONTEND_HOST}" ]]; then
+          sed "s|FRONTEND_HOST|${_FRONTEND_HOST}|g" k8s/managed-certificate.yaml | kubectl apply -f -
+          sed "s|FRONTEND_HOST|${_FRONTEND_HOST}|g" k8s/ingress.yaml | kubectl apply -f -
+        fi
+        kubectl -n "${_NAMESPACE}" rollout status deployment/journey-backend --timeout=5m
+        kubectl -n "${_NAMESPACE}" rollout status deployment/journey-frontend --timeout=5m
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/backend:$SHORT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/frontend:$SHORT_SHA

@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: journey-browser
+  namespace: journey-browser
+  annotations:
+    kubernetes.io/ingress.class: gce
+    kubernetes.io/ingress.allow-http: "false"
+    networking.gke.io/managed-certificates: journey-browser-cert
+spec:
+  rules:
+    - host: FRONTEND_HOST
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: frontend, port: { number: 80 } } }
