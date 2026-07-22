@@ -17,7 +17,7 @@ metadata:
   name: journey-backend
   namespace: journey-browser
 spec:
-  replicas: 2
+  replicas: 1
   selector: { matchLabels: { app: journey-backend } }
   template:
     metadata: { labels: { app: journey-backend } }
@@ -55,5 +55,6 @@ metadata:
   namespace: journey-browser
 spec:
   accessModes: [ReadWriteOnce]
+  storageClassName: standard-rwo
   resources: { requests: { storage: 10Gi } }
   # Change this only if your cluster uses a different default StorageClass.
