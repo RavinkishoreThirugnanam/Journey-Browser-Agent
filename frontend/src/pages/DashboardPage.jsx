@@ -9,6 +9,7 @@ function Stat({ label, value, note }) {
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{note}</small>
+      <small>3333</small>
     </div>
   )
 }
