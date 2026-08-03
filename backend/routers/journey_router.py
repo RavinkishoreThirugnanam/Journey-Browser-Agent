@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
-from schemas.journey_schema import JourneyDetailResponse, JourneyVisualizeRequest, JourneyVisualizeResponse
+from schemas.journey_schema import JourneyBulkDeleteRequest, JourneyDetailResponse, JourneyVisualizeRequest, JourneyVisualizeResponse
 from services.artifact_file_service import write_text_file, unique_filename
-from services.journey_map_service import clear_journeys, delete_journey, get_journey, list_journeys
+from services.journey_map_service import cleanup_orphan_artifacts, clear_journeys, delete_journey, delete_journeys, get_journey, list_journeys
 from services.mermaid_agent_service import journey_to_mermaid
 
 router = APIRouter()
@@ -23,18 +23,28 @@ def journeys():
 
 @router.delete('/journeys')
 def reset_journeys():
-    clear_journeys()
-    return {'message': 'Journey data cleared'}
+    cleanup = clear_journeys()
+    return {'message': 'Journey data cleared', **cleanup}
 
+
+@router.post('/journeys/delete-selected')
+def remove_selected_journeys(payload: JourneyBulkDeleteRequest):
+    result = delete_journeys(set(payload.journey_ids))
+    return {'message': f"{result['deleted_count']} journey discoveries deleted", **result}
 
 @router.delete('/journeys/{journey_id}')
 def remove_journey(journey_id: str):
-    deleted = delete_journey(journey_id)
-    if not deleted:
+    result = delete_journey(journey_id)
+    if not result.get('deleted'):
         raise HTTPException(status_code=404, detail='Journey not found')
-    return {'message': 'Journey deleted', 'journey_id': journey_id}
+    return {'message': 'Journey deleted', 'journey_id': journey_id, **result}
 
 
+
+@router.delete('/journeys/artifacts/orphans')
+def remove_orphan_artifacts():
+    cleanup = cleanup_orphan_artifacts()
+    return {'message': 'Orphan local artifacts cleaned', **cleanup}
 @router.get('/journeys/{journey_id}', response_model=JourneyDetailResponse)
 def journey_detail(journey_id: str):
     journey = get_journey(journey_id)

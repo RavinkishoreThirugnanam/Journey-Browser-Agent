@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react'
+﻿import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { Badge, Field, PageHeader } from '../components/Ui'
 import { JourneyPage } from './JourneyPage'
 
 export function WorkflowPage() {
-  const [form, setForm] = useState({ application_url: 'https://example.com', environment: 'development', project: 'Demo', max_depth: 1, max_pages: 8, follow_links: true })
+  const [form, setForm] = useState({ application_url: 'https://example.com', objective: 'Discover the primary user journey from the application home page.', environment: 'development', project: 'Demo', max_depth: 3, max_pages: 8, follow_links: true, min_events: 10 })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [configLoading, setConfigLoading] = useState(true)
@@ -19,7 +19,7 @@ export function WorkflowPage() {
       if (!mounted) return
       const baseUrl = config?.application?.base_url
       if (baseUrl) {
-        setForm((current) => ({ ...current, application_url: baseUrl, environment: config?.application?.environment ?? current.environment, project: config?.application?.default_project ?? current.project }))
+        setForm((current) => ({ ...current, application_url: baseUrl, environment: config?.application?.environment ?? current.environment, project: config?.application?.default_project ?? current.project, follow_links: config?.application?.default_follow_links !== false }))
       }
     }).catch(() => {}).finally(() => {
       if (mounted) setConfigLoading(false)
@@ -34,8 +34,9 @@ export function WorkflowPage() {
     try {
       const result = await api.startExploration({
         application_url: form.application_url,
+        objective: form.objective,
         parameters: { environment: form.environment, project: form.project },
-        crawl: { max_depth: Number(form.max_depth), max_pages: Number(form.max_pages), follow_links: form.follow_links },
+        crawl: { max_depth: Number(form.max_depth), max_pages: Number(form.max_pages), follow_links: form.follow_links, min_events: Number(form.min_events) },
       })
       setMessage(`Exploration complete: ${result.journey_id}. Review the discovered journey below.`)
       setLatestJourneyId(result.journey_id || '')
@@ -44,8 +45,15 @@ export function WorkflowPage() {
       requestAnimationFrame(() => {
         discoveryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
-    } catch {
-      setMessage('Failed to start exploration.')
+    } catch (error) {
+      let detail = error?.message || 'Unknown error'
+      try {
+        const parsed = JSON.parse(detail)
+        detail = parsed.detail || parsed.message || detail
+      } catch {
+        // Keep the raw API message when the server did not return JSON.
+      }
+      setMessage(`Failed to start exploration: ${detail}`)
     } finally {
       setLoading(false)
     }
@@ -78,18 +86,8 @@ export function WorkflowPage() {
               <div className="page-loading">Loading configuration...</div>
             ) : (
               <form onSubmit={start} className="form-grid journey-create-form">
-                <Field label="Application URL"><input value={form.application_url} onChange={(e) => setForm({ ...form, application_url: e.target.value })} /></Field>
-                <Field label="Environment"><input value={form.environment} onChange={(e) => setForm({ ...form, environment: e.target.value })} /></Field>
-                <Field label="Default Project"><input value={form.project} onChange={(e) => setForm({ ...form, project: e.target.value })} /></Field>
-                <Field label="Max Depth"><input type="number" min="0" value={form.max_depth} onChange={(e) => setForm({ ...form, max_depth: e.target.value })} /></Field>
-                <Field label="Max Pages"><input type="number" min="1" value={form.max_pages} onChange={(e) => setForm({ ...form, max_pages: e.target.value })} /></Field>
-                <label className="field checkbox-field checkbox-clickable journey-follow-links-field">
-                  <span>
-                    Follow Links
-                    <small>Allow the browser agent to follow discovered same-site links during exploration.</small>
-                  </span>
-                  <input type="checkbox" checked={form.follow_links} onChange={(e) => setForm({ ...form, follow_links: e.target.checked })} />
-                </label>
+                <Field label="Application URL"><input type="url" required value={form.application_url} onChange={(e) => setForm({ ...form, application_url: e.target.value })} /></Field>
+                <Field label="Journey Objective"><textarea rows="6" maxLength={6000} required placeholder="Example: Open the base URL, click Preferences, open Workspaces, then inspect Report Lookup." value={form.objective} onChange={(e) => setForm({ ...form, objective: e.target.value })} /></Field>
                 <div className="modal-footer journey-create-footer">
                   <button type="button" className="secondary-button" onClick={() => setShowCreateModal(false)} disabled={loading}>Cancel</button>
                   <button type="submit" disabled={loading}>{loading ? 'Creating Journey Maps...' : 'Create Journey Maps'}</button>
@@ -102,3 +100,8 @@ export function WorkflowPage() {
     </>
   )
 }
+
+
+
+
+

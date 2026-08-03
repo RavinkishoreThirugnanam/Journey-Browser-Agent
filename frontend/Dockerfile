@@ -1,11 +1,7 @@
-FROM node:20-alpine AS build
+FROM node:20-alpine
 WORKDIR /app
-COPY package.json package-lock.json vite.config.js index.html ./
+COPY package.json vite.config.js index.html ./
 COPY src ./src
-RUN npm ci
-RUN npm run build
-FROM nginxinc/nginx-unprivileged:1.27-alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 8080
-CMD ["nginx", "-g", "daemon off;"]
+RUN npm install
+EXPOSE 5173
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

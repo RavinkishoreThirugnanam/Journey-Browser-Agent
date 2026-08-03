@@ -10,7 +10,7 @@ from typing import Any
 from dotenv import load_dotenv
 
 from core.config import BASE_DIR, STORAGE_DIR
-from services.token_manager import TokenManager
+from services.llm_generation_service import get_llm_runtime_config
 
 logger = logging.getLogger('step6_summary')
 
@@ -78,24 +78,21 @@ async def initialise_llm(openai_settings: dict[str, Any]) -> Any | None:
         logger.warning('langchain_openai is not installed; Step 6 will use a local markdown fallback.')
         return None
 
-    model_name = (openai_settings.get('model_name', '') or 'gpt-4o-mini').strip()
-    base_url = os.environ.get('OPENAI_BASE_URL') or os.environ.get('OPENAI_API_BASE') or ''
-
-    token_manager = TokenManager()
-    openai_api_key = token_manager.get_valid_token()
-    if asyncio.iscoroutine(openai_api_key):
-        openai_api_key = await openai_api_key
-
-    if not openai_api_key:
+    runtime = get_llm_runtime_config()
+    model_name = (openai_settings.get('model_name', '') or runtime.model or 'gpt-4o-mini').strip()
+    if not runtime.auth_token:
         logger.warning('OpenAI API key could not be retrieved; Step 6 will use a local markdown fallback.')
         return None
 
     kwargs: dict[str, Any] = {
         'model': model_name,
-        'api_key': openai_api_key,
+        'api_key': runtime.auth_token,
     }
-    if base_url:
-        kwargs['base_url'] = base_url.rstrip('/')
+    endpoint = runtime.api_endpoint
+    if endpoint.endswith('/chat/completions'):
+        endpoint = endpoint[: -len('/chat/completions')]
+    if endpoint:
+        kwargs['base_url'] = endpoint.rstrip('/')
 
     logger.info('Initialising OpenAI ChatOpenAI client -> %s', model_name)
     return ChatOpenAI(**kwargs)

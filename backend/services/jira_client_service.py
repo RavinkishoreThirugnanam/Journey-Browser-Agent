@@ -25,15 +25,16 @@ def _request(config: JiraConfiguration, method: str, path: str, *, json: dict[st
     if not config.base_url or not config.project_key:
         raise JiraClientError('Jira base_url and project_key are required')
     url = f"{config.base_url.rstrip('/')}{path}"
-    response = requests.request(
-        method=method,
-        url=url,
-        headers={**_auth_headers(config), 'Accept': 'application/json', 'Content-Type': 'application/json'},
-        json=json,
-        timeout=20,
-    )
-    return response
-
+    try:
+        return requests.request(
+            method=method,
+            url=url,
+            headers={**_auth_headers(config), 'Accept': 'application/json', 'Content-Type': 'application/json'},
+            json=json,
+            timeout=20,
+        )
+    except requests.RequestException as exc:
+        raise JiraClientError(f'Jira request failed for {config.base_url}: {exc}') from exc
 
 def test_connection(config: JiraConfiguration) -> dict[str, str]:
     response = _request(config, 'GET', '/rest/api/3/myself')

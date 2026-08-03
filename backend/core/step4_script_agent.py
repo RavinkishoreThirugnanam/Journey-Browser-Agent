@@ -1,9 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-from services.artifact_file_service import write_json_file
+from services.artifact_file_service import write_json_file, write_text_file
 from services.test_script_agent_service import generate_test_scripts
 
 
@@ -30,6 +30,9 @@ async def run_test_script_pipeline(
 ) -> dict[str, Any]:
     test_cases = _extract_test_cases(test_cases_payload)
     scripts = [item.model_dump() for item in generate_test_scripts(test_cases)]
+    for script in scripts:
+        write_text_file(script["feature_filename"], script["feature_file"])
+        write_text_file(script["javascript_filename"], script["javascript_file"])
 
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"test_scripts_{timestamp}.json"

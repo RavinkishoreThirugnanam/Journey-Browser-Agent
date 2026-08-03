@@ -7,6 +7,7 @@ class Interaction(BaseModel):
     element_type: str = ''
     element_label: str = ''
     element_id: str | None = None
+    role: str = ''
     selector: str = ''
     selector_type: str = ''
     action: str = ''
@@ -28,6 +29,23 @@ class Interaction(BaseModel):
     is_shadow_dom: bool = False
     iframe_context: str | None = None
     parent_component: str = ''
+    event_timestamp: str = ''
+    screenshot_before: str | None = None
+    screenshot_after: str | None = None
+    destination_url: str | None = None
+    coordinates: dict[str, float] = Field(default_factory=dict)
+    network_events: list[dict[str, object]] = Field(default_factory=list)
+    dom_snapshot_before: str | None = None
+    dom_snapshot_after: str | None = None
+    iframe_inventory: list[dict[str, object]] = Field(default_factory=list)
+    popup_activity: list[dict[str, object]] = Field(default_factory=list)
+    replay: dict[str, object] = Field(default_factory=dict)
+    event_id: str = ''
+    page_id: str = ''
+    route: str = ''
+    state_fingerprint_before: str = ''
+    state_fingerprint_after: str = ''
+    visible_elements: list[dict[str, object]] = Field(default_factory=list)
 
 
 class JourneyStep(BaseModel):
@@ -39,6 +57,7 @@ class JourneyStep(BaseModel):
 
 
 class ExplorationMetadata(BaseModel):
+    exploration_id: str = ''
     app_url: str = ''
     starting_feature: str = ''
     task_input: str = ''
@@ -62,9 +81,14 @@ class JourneyRecord(BaseModel):
     session_boundary_url: str | None = None
     total_depth: int = 0
     test_hints: dict[str, object] = Field(default_factory=dict)
+    business_assurance: dict[str, object] = Field(default_factory=dict)
     housekeeping_steps: list[dict[str, object]] = Field(default_factory=list)
     steps: list[JourneyStep] = Field(default_factory=list)
     events: list[Interaction] = Field(default_factory=list)
+
+
+class JourneyBulkDeleteRequest(BaseModel):
+    journey_ids: list[str] = Field(min_length=1)
 
 
 class ExplorationResult(BaseModel):
@@ -84,6 +108,7 @@ class JourneyDetailResponse(BaseModel):
     session_boundary_url: str | None = None
     total_depth: int = 0
     test_hints: dict[str, object] = Field(default_factory=dict)
+    business_assurance: dict[str, object] = Field(default_factory=dict)
     housekeeping_steps: list[dict[str, object]] = Field(default_factory=list)
     steps: list[JourneyStep] = Field(default_factory=list)
     events: list[Interaction] = Field(default_factory=list)

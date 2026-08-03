@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+﻿from fastapi import APIRouter, HTTPException
 
 from schemas.exploration_schema import ExplorationRequest, ExplorationResponse
 from services.browser_agent_service import explore_application
@@ -14,9 +14,16 @@ def start_exploration(payload: ExplorationRequest):
         application_url = str(payload.application_url) if payload.application_url else ''
         if not application_url or application_url == 'None':
             application_url = read_configuration().get('application', {}).get('base_url', '')
-        exploration = explore_application(application_url, payload.parameters, payload.crawl.model_dump())
+        exploration = explore_application(application_url, payload.parameters, payload.crawl.model_dump(), payload.objective)
         save_journey(exploration)
         first_journey_id = exploration.journeys[0].journey_id if exploration.journeys else ''
-        return ExplorationResponse(message='Exploration started successfully', journey_id=first_journey_id, journey_count=len(exploration.journeys))
+        return ExplorationResponse(
+            message='Exploration started successfully',
+            journey_id=first_journey_id,
+            journey_count=len(exploration.journeys),
+            exploration_metadata=exploration.exploration_metadata.model_dump(),
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f'Exploration failed: {exc}') from exc
+
+

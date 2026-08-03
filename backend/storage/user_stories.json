@@ -293,5 +293,1169 @@
       "qa"
     ],
     "component": "Browser Agent"
+  },
+  {
+    "story_id": "2b6dc315-6bc0-4916-9795-aab36722688b",
+    "journey_id": "5ad4c240-13df-44a4-a8e2-302c7854e0c7",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "c6f1bf15-9249-4e5d-8953-b668a5ae7b12",
+    "journey_id": "9fb0b594-5940-48db-bf65-2568419b23f6",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "aa7009bf-4b13-4701-a7cf-b7c509c92975",
+    "journey_id": "725bf58e-78ea-4056-941a-4eee9ad6c68b",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "315cc45d-ce3f-4b5b-819c-5c953cf13c0d",
+    "journey_id": "44d4756d-4f50-4ec3-9d13-ff2f3f318246",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "d75b6adf-d5aa-45a4-a55f-3258b9b7e1fd",
+    "journey_id": "ec0b7b27-4cba-47b1-b7d2-8cdfb3093a4b",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-02 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "a2715fe8-2ce1-4367-b048-eda33d3ee4bc",
+    "journey_id": "aac15693-796b-4fdf-b88b-8cf8c8177164",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "ed76e6cf-0546-4f8f-8fbc-f57726421681",
+    "journey_id": "215a72ce-c134-42dc-97a1-673c58c70112",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "c328c5b4-662a-4214-80a0-5d229c2d688e",
+    "journey_id": "da6e4b39-eaef-46ed-ac6e-3d093efcaae5",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "70eb80a8-e836-4c8f-8fa6-ecdba65ec186",
+    "journey_id": "1ce204d3-6a2c-4fc9-8e0e-19721508c0ff",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "895c0c45-6cb9-440c-8200-476f2cdba740",
+    "journey_id": "f19f6f91-6f67-46a6-aa73-2f4aa9ad60d7",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "a1427cb4-80ee-4fcd-bab1-477b7f83f299",
+    "journey_id": "f308e004-9962-4609-bbbf-a0db9551aeaf",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-02 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "485b7e11-1dd6-4462-8228-748aed5020da",
+    "journey_id": "b70631b0-fa9b-4b0b-8365-8f2b60a2475c",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "4a18c5af-c016-4839-a801-e6bcb4574fe3",
+    "journey_id": "15ccd9aa-549c-4648-ad31-e47c4dcd2aea",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "6a3a7f0c-c48a-4951-9f24-60f414ca7cfa",
+    "journey_id": "6c3627a5-02ba-41b1-8336-ba1b822d676d",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "c223df1e-e230-4330-b225-184ea6ea6db1",
+    "journey_id": "10b79908-dee2-467a-bdac-27b8ef10fc5a",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "2e53d9b4-aebf-48fc-8f41-37135509d79a",
+    "journey_id": "4f4bc571-8a17-4bd8-9385-c0a2f266e31e",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "3fa904ed-1cca-418f-9532-5a9fba41b381",
+    "journey_id": "09f74333-8401-45b9-a7d9-d6ac556ac307",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-02 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "5a1bdf65-28c2-4e9d-b01b-866eaac5f8f0",
+    "journey_id": "7614178d-031f-45d4-bc98-2ec4336c223a",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "51cc84cd-11a4-418a-952c-7496b10ceb20",
+    "journey_id": "26f9de19-c046-4f62-8bbc-1b9c4b9d1af0",
+    "generated_at": "2026-07-23T13:02:21.347146+00:00",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "48a453ef-98ba-4972-8451-0f34dbadbed8",
+    "journey_id": "0bb5f757-178a-45bf-b021-20d32ce4d2a5",
+    "generated_at": "2026-07-23T13:02:25.528148+00:00",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "e735c297-fbd7-421a-942f-be95bb848ba6",
+    "journey_id": "c9edf483-8cc8-4155-8060-fb5bf49d6243",
+    "generated_at": "2026-07-23T13:02:31.798876+00:00",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "8ef8fe4c-328e-4695-9d48-c79611e6f133",
+    "journey_id": "633be473-9c2f-4dc3-9d93-e6165d2277fa",
+    "generated_at": "2026-07-23T13:02:42.328399+00:00",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "d85627d2-9372-490b-9719-ca2e7a2e8534",
+    "journey_id": "f80ac99f-e6a4-4752-8868-e8684510226e",
+    "generated_at": "2026-07-23T13:02:42.328399+00:00",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-02 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "8535a073-f22e-4feb-b06a-020b60e788ed",
+    "journey_id": "243574b9-2104-4e09-97c7-9f0bb0273c17",
+    "generated_at": "2026-07-23T13:02:46.576487+00:00",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Example.Com - Discovered from base URL",
+    "description": "As a user, I want Discover the primary user journey from the application home page. to be captured as a Jira-ready story so that QA can validate the real navigation path and derive reliable automation assets.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "The journey should preserve the original navigation order from https://example.com/ and allow the user to move through the captured workflow without losing source URL context.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Primary actions discovered on Home should lead to the expected same-origin destination or same-page state change and record the transition across 1 captured events.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "The journey detail view should expose the page title, URL, action, depth, element label, selector, and interaction result for each captured step. Key selectors such as https://example.com/ should remain stable for automation.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Input controls, dropdowns, buttons, links, modal states, and validation messages should remain visible and traceable for downstream QA review.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "a2573fc3-6f16-4d1f-a34f-b795dbf14e68",
+    "journey_id": "8938b247-918c-487b-9cd4-6f3146b16f74",
+    "generated_at": "2026-07-23T13:28:35.034361+00:00",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Discover the primary user journey from the application home page.",
+    "description": "As a user, I want to Discover the primary user journey from the application home page. so that QA can validate the exact journey captured from https://example.com/. Captured path: Home (https://example.com/). Observed interactions: open - Home - page_load. Expected outcome: Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "Given the user starts from https://example.com/, when the captured journey is replayed, then the flow should follow this observed path without introducing unrelated pages: Home (https://example.com/).",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Given the journey objective is executed, when the user performs the captured actions (open - Home - page_load), then each navigation or same-page state change should be recorded and the final outcome should match: Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Given the journey contains 1 captured step(s) and 1 event(s), then each step should expose page title, URL, action, element label, selector or role, result, timestamp, depth, and before or after state where available.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Given downstream QA uses this story for automation, then selectors and UI references such as https://example.com/ plus validations such as any observed validation or empty-state messages should remain traceable to the original journey map and UI element extraction.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "d7c31fe9-0eef-4a5d-9e00-602b5517d289",
+    "journey_id": "7c120159-888f-414f-9d46-f4a3f719b281",
+    "generated_at": "2026-07-23T13:28:39.281022+00:00",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Discover the primary user journey from the application home page.",
+    "description": "As a user, I want to Discover the primary user journey from the application home page. so that QA can validate the exact journey captured from https://example.com/. Captured path: Home (https://example.com/). Observed interactions: open - Home - page_load. Expected outcome: Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "Given the user starts from https://example.com/, when the captured journey is replayed, then the flow should follow this observed path without introducing unrelated pages: Home (https://example.com/).",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Given the journey objective is executed, when the user performs the captured actions (open - Home - page_load), then each navigation or same-page state change should be recorded and the final outcome should match: Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Given the journey contains 1 captured step(s) and 1 event(s), then each step should expose page title, URL, action, element label, selector or role, result, timestamp, depth, and before or after state where available.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Given downstream QA uses this story for automation, then selectors and UI references such as https://example.com/ plus validations such as any observed validation or empty-state messages should remain traceable to the original journey map and UI element extraction.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "83acc1e6-38e6-432f-a5c5-0378eb5af7ca",
+    "journey_id": "25b66e58-5058-4cd9-8d5b-c37c378bd826",
+    "generated_at": "2026-07-23T13:28:45.591531+00:00",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Discover the primary user journey from the application home page.",
+    "description": "As a user, I want to Discover the primary user journey from the application home page. so that QA can validate the exact journey captured from https://example.com/. Captured path: Home (https://example.com/). Observed interactions: open - Home - page_load. Expected outcome: Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "Given the user starts from https://example.com/, when the captured journey is replayed, then the flow should follow this observed path without introducing unrelated pages: Home (https://example.com/).",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Given the journey objective is executed, when the user performs the captured actions (open - Home - page_load), then each navigation or same-page state change should be recorded and the final outcome should match: Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Given the journey contains 1 captured step(s) and 1 event(s), then each step should expose page title, URL, action, element label, selector or role, result, timestamp, depth, and before or after state where available.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Given downstream QA uses this story for automation, then selectors and UI references such as https://example.com/ plus validations such as any observed validation or empty-state messages should remain traceable to the original journey map and UI element extraction.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "5dbc35bb-8a0d-4d30-9e05-3bc6aefaa92b",
+    "journey_id": "5e29dcd2-bff9-4c39-a47f-1eb346a7c1a8",
+    "generated_at": "2026-07-23T13:28:56.180241+00:00",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Discover the primary user journey from the application home page.",
+    "description": "As a user, I want to Discover the primary user journey from the application home page. so that QA can validate the exact journey captured from https://example.com/. Captured path: Home (https://example.com/). Observed interactions: open - Home - page_load. Expected outcome: Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "Given the user starts from https://example.com/, when the captured journey is replayed, then the flow should follow this observed path without introducing unrelated pages: Home (https://example.com/).",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Given the journey objective is executed, when the user performs the captured actions (open - Home - page_load), then each navigation or same-page state change should be recorded and the final outcome should match: Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Given the journey contains 1 captured step(s) and 1 event(s), then each step should expose page title, URL, action, element label, selector or role, result, timestamp, depth, and before or after state where available.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Given downstream QA uses this story for automation, then selectors and UI references such as https://example.com/ plus validations such as any observed validation or empty-state messages should remain traceable to the original journey map and UI element extraction.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "9fc736d7-bba2-4e40-9865-c23bf50f6516",
+    "journey_id": "4d5f6835-617c-4c9e-ad25-fbde8ec39348",
+    "generated_at": "2026-07-23T13:28:56.180241+00:00",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-02 Discover the primary user journey from the application home page.",
+    "description": "As a user, I want to Discover the primary user journey from the application home page. so that QA can validate the exact journey captured from https://example.com/. Captured path: Home (https://example.com/). Observed interactions: open - Home - page_load. Expected outcome: Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "Given the user starts from https://example.com/, when the captured journey is replayed, then the flow should follow this observed path without introducing unrelated pages: Home (https://example.com/).",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Given the journey objective is executed, when the user performs the captured actions (open - Home - page_load), then each navigation or same-page state change should be recorded and the final outcome should match: Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Given the journey contains 1 captured step(s) and 1 event(s), then each step should expose page title, URL, action, element label, selector or role, result, timestamp, depth, and before or after state where available.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Given downstream QA uses this story for automation, then selectors and UI references such as https://example.com/ plus validations such as any observed validation or empty-state messages should remain traceable to the original journey map and UI element extraction.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "dd40f3d8-51ee-493a-a532-b75b01e03e1e",
+    "journey_id": "0906c1c6-593e-4061-ba15-41943759ff7f",
+    "generated_at": "2026-07-23T13:29:00.431869+00:00",
+    "epic": "Core Web Journey Epic",
+    "module": "Core Web Journey",
+    "summary": "US-01 Discover the primary user journey from the application home page.",
+    "description": "As a user, I want to Discover the primary user journey from the application home page. so that QA can validate the exact journey captured from https://example.com/. Captured path: Home (https://example.com/). Observed interactions: open - Home - page_load. Expected outcome: Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "Given the user starts from https://example.com/, when the captured journey is replayed, then the flow should follow this observed path without introducing unrelated pages: Home (https://example.com/).",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Given the journey objective is executed, when the user performs the captured actions (open - Home - page_load), then each navigation or same-page state change should be recorded and the final outcome should match: Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Given the journey contains 1 captured step(s) and 1 event(s), then each step should expose page title, URL, action, element label, selector or role, result, timestamp, depth, and before or after state where available.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Given downstream QA uses this story for automation, then selectors and UI references such as https://example.com/ plus validations such as any observed validation or empty-state messages should remain traceable to the original journey map and UI element extraction.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "automation",
+      "browser",
+      "journey",
+      "qa"
+    ],
+    "component": "Browser Agent"
+  },
+  {
+    "story_id": "7caa5d2e-1d43-4967-a3f2-e449a9a856f4",
+    "journey_id": "84fdd92e-07e5-4448-9397-3a575c9239c2",
+    "generated_at": "2026-07-30T07:46:38.795394+00:00",
+    "generation_source": "openai",
+    "generation_model": "gpt-4o-mini",
+    "epic": "Special Offers Exploration",
+    "module": "Special Offers Module",
+    "summary": "US-01 View Special Offers from Disneyworld",
+    "description": "As a user, I want to view special offers on the Disneyworld website so that I can explore available deals and discounts. Starting from https://disneyworld.disney.go.com/, I hover over the Tickets & Parks item in the main navigation. After the dropdown menu appears, I click on the child link 'View Special Offers'. Upon navigation, I confirm the URL contains /special-offers/ and wait for the page and offer cards to finish loading. I capture the page title, heading, filters, offer count, and all visible offer cards. I scroll through the complete page to detect lazy-loaded cards or pagination. For every offer card, I record its title, description, pricing, eligibility, CTA text, and destination URL. I test each available filter and use 'Clear All' after every filter test. I open each offer card, capture its details, then return to the Special Offers listing page before opening the next card.",
+    "acceptance_criteria": [
+      {
+        "ac_type": "functional",
+        "ac_text": "Given the user starts from https://disneyworld.disney.go.com/, when the captured journey is replayed, then the flow should follow this observed path without introducing unrelated pages: Special Offers, Deals & Discounts | Walt Disney World Resort (https://disneyworld.disney.go.com/special-offers/) -> Special Offers, Deals & Discounts | Walt Disney World Resort (https://disneyworld.disney.go.com/special-offers/) -> Special Offers, Deals & Discounts | Walt Disney World Resort (https://disneyworld.disney.go.com/special-offers/).",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "functional",
+        "ac_text": "Given the journey objective is executed, when the user performs the captured actions (open - Special Offers, Deals & Discounts | Walt Disney World Resort - navigated_from: https://disneyworld.disney.go.com/; open - Walt Disney World Resort near Orlando, Florida \u2013 Official Site - page_load; inspect - page scan - Page scan found 8 headings, 18 buttons, 19 links, 7 inputs, 2 menus, and 0 forms; inspect - Visit Disney.com - visible_control_captured; inspect - Skip Navigation - visible_control_captured; inspect - Log In or Create Account - visible_control_captured; inspect - United States (English) - visible_control_captured; hover - Tickets & Parks - hover_no_change), then each navigation or same-page state change should be recorded and the final outcome should match: Journey discovered successfully from the base URL..",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Given the journey contains 3 captured step(s) and 13 event(s), then each step should expose page title, URL, action, element label, selector or role, result, timestamp, depth, and before or after state where available.",
+        "ac_id": ""
+      },
+      {
+        "ac_type": "ui",
+        "ac_text": "Given downstream QA uses this story for automation, then selectors and UI references such as https://disneyworld.disney.go.com/special-offers/, https://disneyworld.disney.go.com/, document.querySelectorAll, a[href=\"https://www.disney.com/\"] plus validations such as any observed validation or empty-state messages should remain traceable to the original journey map and UI element extraction.",
+        "ac_id": ""
+      }
+    ],
+    "labels": [
+      "disneyworld",
+      "exploration",
+      "specialoffers"
+    ],
+    "component": "Browser Agent",
+    "jira_key": "FL-683",
+    "jira_url": "https://factspan.atlassian.net/browse/FL-683",
+    "jira_sync_status": "synced"
   }
 ]

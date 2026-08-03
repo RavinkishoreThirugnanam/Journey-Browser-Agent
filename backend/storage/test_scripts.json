@@ -1,8 +1,77 @@
 [
   {
-    "script_id": "48440020-8f0a-4be3-bbe0-3de22f89f771",
-    "test_case_id": "7cdc5dca-abba-499d-a533-cec3baeef8c0",
-    "feature_file": "Feature: Test journey 2e170144-73da-468b-975c-52ecec7242eb\n  Scenario: Execute journey\n    Given the application is reachable\n    When the user follows the journey\n    Then the expected results are observed\n",
-    "javascript_file": "describe('Test journey 2e170144-73da-468b-975c-52ecec7242eb', () => { test('journey flow', async () => { /* mock automation */ }); });"
+    "script_id": "6dbc2ea2-4ee8-4a4d-aa01-1a385e0fa378",
+    "test_case_id": "68b07820-fa7f-4fa5-b450-683812783e5c",
+    "feature_file": "Feature: Validate US-01 Example.Com - Discovered from base URL\n\n  # Objective: Discover the primary user journey from the application home page.\n  Scenario: Validate US-01 Example.Com - Discovered from base URL\n    Given User has access to the target workflow\n    And The application is available at https://example.com/\n    And The journey objective is: Discover the primary user journey from the application home page.\n    When Open https://example.com/\n    Then page_load\n    Then Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied",
+    "javascript_file": "const { Given, When, Then } = require('@cucumber/cucumber');\n\nGiven(\"User has access to the target workflow\", async function () {\n    // Precondition 1\n});\n\nGiven(\"The application is available at https://example.com/\", async function () {\n    // Precondition 2\n    await this.page.goto(\"https://example.com/\", { timeout: 60000, waitUntil: 'domcontentloaded' });\n    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});\n});\n\nGiven(\"The journey objective is: Discover the primary user journey from the application home page.\", async function () {\n    // Precondition 3\n});\n\nWhen(\"Open https://example.com/\", async function () {\n    await this.page.goto(\"page_load\", { timeout: 60000, waitUntil: 'domcontentloaded' });\n});\n\nThen(\"page_load\", async function () {\n    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});\n});\n\nThen(\"Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied\", async function () {\n    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});\n});\n",
+    "feature_filename": "validate_us_01_example_com_discovered_from_base_url_6dbc2ea2.feature",
+    "javascript_filename": "validate_us_01_example_com_discovered_from_base_url_6dbc2ea2.js",
+    "journey_id": "725bf58e-78ea-4056-941a-4eee9ad6c68b",
+    "user_story_id": "aa7009bf-4b13-4701-a7cf-b7c509c92975",
+    "journey_objective": "Discover the primary user journey from the application home page.",
+    "source_evidence_count": 1
+  },
+  {
+    "script_id": "84b388b6-9615-467b-a631-84c2fa35823e",
+    "test_case_id": "d45e221b-ffe6-4de2-a958-db552484d722",
+    "feature_file": "Feature: Validate US-01 Example.Com - Discovered from base URL\n\n  # Objective: Discover the primary user journey from the application home page.\n  Scenario: Validate US-01 Example.Com - Discovered from base URL\n    Given User has access to the target workflow\n    And The application is available at https://example.com/\n    And The journey objective is: Discover the primary user journey from the application home page.\n    When Open https://example.com/\n    Then page_load\n    Then Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied",
+    "javascript_file": "const { Given, When, Then } = require('@cucumber/cucumber');\n\nGiven(\"User has access to the target workflow\", async function () {\n    // Precondition 1\n});\n\nGiven(\"The application is available at https://example.com/\", async function () {\n    // Precondition 2\n    await this.page.goto(\"https://example.com/\", { timeout: 60000, waitUntil: 'domcontentloaded' });\n    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});\n});\n\nGiven(\"The journey objective is: Discover the primary user journey from the application home page.\", async function () {\n    // Precondition 3\n});\n\nWhen(\"Open https://example.com/\", async function () {\n    await this.page.goto(\"page_load\", { timeout: 60000, waitUntil: 'domcontentloaded' });\n});\n\nThen(\"page_load\", async function () {\n    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});\n});\n\nThen(\"Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied\", async function () {\n    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});\n});\n",
+    "feature_filename": "validate_us_01_example_com_discovered_from_base_url_84b388b6.feature",
+    "javascript_filename": "validate_us_01_example_com_discovered_from_base_url_84b388b6.js",
+    "journey_id": "1ce204d3-6a2c-4fc9-8e0e-19721508c0ff",
+    "user_story_id": "70eb80a8-e836-4c8f-8fa6-ecdba65ec186",
+    "journey_objective": "Discover the primary user journey from the application home page.",
+    "source_evidence_count": 1
+  },
+  {
+    "script_id": "5fe3084b-cab5-43ce-aa2a-954eee377e31",
+    "test_case_id": "4eced870-22a2-4219-bd4c-e5d039dc643a",
+    "feature_file": "Feature: Validate US-01 Example.Com - Discovered from base URL\n\n  # Objective: Discover the primary user journey from the application home page.\n  Scenario: Validate US-01 Example.Com - Discovered from base URL\n    Given User has access to the target workflow\n    And The application is available at https://example.com/\n    And The journey objective is: Discover the primary user journey from the application home page.\n    When Open https://example.com/\n    Then page_load\n    Then Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied",
+    "javascript_file": "const { Given, When, Then } = require('@cucumber/cucumber');\n\nGiven(\"User has access to the target workflow\", async function () {\n    // Precondition 1\n});\n\nGiven(\"The application is available at https://example.com/\", async function () {\n    // Precondition 2\n    await this.page.goto(\"https://example.com/\", { timeout: 60000, waitUntil: 'domcontentloaded' });\n    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});\n});\n\nGiven(\"The journey objective is: Discover the primary user journey from the application home page.\", async function () {\n    // Precondition 3\n});\n\nWhen(\"Open https://example.com/\", async function () {\n    await this.page.goto(\"page_load\", { timeout: 60000, waitUntil: 'domcontentloaded' });\n});\n\nThen(\"page_load\", async function () {\n    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});\n});\n\nThen(\"Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied\", async function () {\n    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});\n});\n",
+    "feature_filename": "validate_us_01_example_com_discovered_from_base_url_5fe3084b.feature",
+    "javascript_filename": "validate_us_01_example_com_discovered_from_base_url_5fe3084b.js",
+    "journey_id": "10b79908-dee2-467a-bdac-27b8ef10fc5a",
+    "user_story_id": "c223df1e-e230-4330-b225-184ea6ea6db1",
+    "journey_objective": "Discover the primary user journey from the application home page.",
+    "source_evidence_count": 1
+  },
+  {
+    "script_id": "62cf2e80-d9b4-44b2-8525-5726c189c10d",
+    "test_case_id": "2bdf5244-e6d2-45ad-8446-1154ba55f22f",
+    "generated_at": "2026-07-23T13:02:35.970409+00:00",
+    "feature_file": "Feature: Validate US-01 Example.Com - Discovered from base URL\n\n  # Objective: Discover the primary user journey from the application home page.\n  Scenario: Validate US-01 Example.Com - Discovered from base URL\n    Given User has access to the target workflow\n    And The application is available at https://example.com/\n    And The journey objective is: Discover the primary user journey from the application home page.\n    When Open https://example.com/\n    Then page_load\n    Then Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied",
+    "javascript_file": "const { Given, When, Then } = require('@cucumber/cucumber');\n\nGiven(\"User has access to the target workflow\", async function () {\n    // Precondition 1\n});\n\nGiven(\"The application is available at https://example.com/\", async function () {\n    // Precondition 2\n    await this.page.goto(\"https://example.com/\", { timeout: 60000, waitUntil: 'domcontentloaded' });\n    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});\n});\n\nGiven(\"The journey objective is: Discover the primary user journey from the application home page.\", async function () {\n    // Precondition 3\n});\n\nWhen(\"Open https://example.com/\", async function () {\n    await this.page.goto(\"page_load\", { timeout: 60000, waitUntil: 'domcontentloaded' });\n});\n\nThen(\"page_load\", async function () {\n    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});\n});\n\nThen(\"Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied\", async function () {\n    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});\n});\n",
+    "feature_filename": "validate_us_01_example_com_discovered_from_base_url_62cf2e80.feature",
+    "javascript_filename": "validate_us_01_example_com_discovered_from_base_url_62cf2e80.js",
+    "journey_id": "c9edf483-8cc8-4155-8060-fb5bf49d6243",
+    "user_story_id": "e735c297-fbd7-421a-942f-be95bb848ba6",
+    "journey_objective": "Discover the primary user journey from the application home page.",
+    "source_evidence_count": 1
+  },
+  {
+    "script_id": "0b1b03e9-cd8d-4f50-aea9-6c5c44b4742d",
+    "test_case_id": "439be1f4-dd92-4c1f-92fc-7bb028171d47",
+    "generated_at": "2026-07-23T13:28:49.754831+00:00",
+    "feature_file": "Feature: Validate US-01 Discover the primary user journey from the application home page.\n\n  # Objective: Discover the primary user journey from the application home page.\n  Scenario: Validate US-01 Discover the primary user journey from the application home page.\n    Given User has access to the target workflow\n    And The application is available at https://example.com/\n    And The journey objective is: Discover the primary user journey from the application home page.\n    When Open https://example.com/\n    Then page_load\n    Then Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied",
+    "javascript_file": "const { Given, When, Then } = require('@cucumber/cucumber');\n\nGiven(\"User has access to the target workflow\", async function () {\n    // Precondition 1\n});\n\nGiven(\"The application is available at https://example.com/\", async function () {\n    // Precondition 2\n    await this.page.goto(\"https://example.com/\", { timeout: 60000, waitUntil: 'domcontentloaded' });\n    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});\n});\n\nGiven(\"The journey objective is: Discover the primary user journey from the application home page.\", async function () {\n    // Precondition 3\n});\n\nWhen(\"Open https://example.com/\", async function () {\n    await this.page.goto(\"page_load\", { timeout: 60000, waitUntil: 'domcontentloaded' });\n});\n\nThen(\"page_load\", async function () {\n    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});\n});\n\nThen(\"Browser exploration fell back to URL-level capture only. PermissionError: [WinError 5] Access is denied\", async function () {\n    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});\n});\n",
+    "feature_filename": "validate_us_01_discover_the_primary_user_journey_from_the_ap_0b1b03e9.feature",
+    "javascript_filename": "validate_us_01_discover_the_primary_user_journey_from_the_ap_0b1b03e9.js",
+    "journey_id": "25b66e58-5058-4cd9-8d5b-c37c378bd826",
+    "user_story_id": "83acc1e6-38e6-432f-a5c5-0378eb5af7ca",
+    "journey_objective": "Discover the primary user journey from the application home page.",
+    "source_evidence_count": 1
+  },
+  {
+    "script_id": "41db42ea-35a8-49c0-9fd8-5eb7c788089c",
+    "test_case_id": "f0e5904e-adc5-4fc2-8161-fbe663a99a89",
+    "generated_at": "2026-07-31T09:30:46.749262+00:00",
+    "feature_file": "Feature: Validate Navigation to Special Offers\n  As a user, I want to view special offers on the Disneyworld website so that I can explore available deals and discounts.\n\n  Scenario: Navigate to Special Offers\n    Given the user starts from \"https://disneyworld.disney.go.com/\"\n    When the user hovers over the \"Tickets & Parks\" item in the main navigation\n    And the user clicks on the \"View Special Offers\" link\n    Then the user should be navigated to the Special Offers page\n    And the page title should be \"Special Offers, Deals & Discounts | Walt Disney World Resort\"",
+    "javascript_file": "const { Given, When, Then } = require('@cucumber/cucumber');\nconst { expect } = require('chai');\n\nGiven('the user starts from {string}', async function (url) {\n    await this.page.goto(url, { waitUntil: 'domcontentloaded' });\n});\n\nWhen('the user hovers over the {string} item in the main navigation', async function (menuItem) {\n    const selector = 'a[name=\"&lid=WDW_Header_ParksTickets_CategoryLink\"]'; // Review if selector is valid\n    await this.page.hover(selector);\n});\n\nWhen('the user clicks on the {string} link', async function (linkText) {\n    const selector = 'a[href=\"/special-offers/\"]'; // Review if selector is valid\n    await this.page.click(selector);\n    await this.page.waitForNavigation({ waitUntil: 'networkidle' });\n});\n\nThen('the user should be navigated to the Special Offers page', async function () {\n    const expectedUrl = 'https://disneyworld.disney.go.com/special-offers/';\n    expect(this.page.url()).to.equal(expectedUrl);\n});\n\nThen('the page title should be {string}', async function (expectedTitle) {\n    const title = await this.page.title();\n    expect(title).to.equal(expectedTitle);\n});",
+    "feature_filename": "validate_navigation_to_special_offers.feature",
+    "javascript_filename": "validate_navigation_to_special_offers.js",
+    "journey_id": "84fdd92e-07e5-4448-9397-3a575c9239c2",
+    "user_story_id": "7caa5d2e-1d43-4967-a3f2-e449a9a856f4",
+    "journey_objective": "Starting from https://disneyworld.disney.go.com/, hover over the Tickets & Parks item in the main navigation and click on 'View Special Offers'.",
+    "source_evidence_count": 13
   }
 ]

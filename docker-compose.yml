@@ -1,23 +1,57 @@
 services:
   backend:
-    build: { context: ./backend, dockerfile: Dockerfile }
-    ports: ["8000:8000"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
     env_file:
-      - path: ./backend/.env
-        required: false
-    volumes: ["./backend/storage:/app/storage"]
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-    networks: [app-network]
-  frontend:
-    build: { context: ./frontend, dockerfile: Dockerfile }
-    ports: ["5173:8080"]
+      - ./backend/.env
+    volumes:
+      - ./backend/storage:/app/storage
+    environment:
+      BROWSER_CDP_URL: http://browser-stream:9222
+      BROWSER_STREAM_URL: http://localhost:7900/vnc.html?autoconnect=true&resize=scale&path=websockify
     depends_on:
-      backend: { condition: service_healthy }
-    networks: [app-network]
+      browser-stream:
+        condition: service_healthy
+    networks:
+      - app-network
+
+
+  browser-stream:
+    build:
+      context: ./browser-stream
+    ports:
+      - "7900:7900"
+      - "9222:9222"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9222/json/version >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - app-network
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    env_file:
+      - ./frontend/.env
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - app-network
+
 networks:
   app-network:
     driver: bridge
+
+
+
+
+
+

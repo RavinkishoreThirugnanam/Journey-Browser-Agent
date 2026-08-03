@@ -25,6 +25,37 @@ function RecentItem({ title, subtitle, badge }) {
   )
 }
 
+function toItems(payload) {
+  return Array.isArray(payload?.items) ? payload.items : Array.isArray(payload) ? payload : []
+}
+
+function freshnessValue(item, index) {
+  const candidates = [
+    item?.generated_at,
+    item?.updated_at,
+    item?.created_at,
+    item?.timestamp,
+    item?.exploration_metadata?.exploration_timestamp,
+  ]
+  for (const value of candidates) {
+    const parsed = Date.parse(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return index
+}
+
+function newest(items, limit = 3) {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => freshnessValue(b.item, b.index) - freshnessValue(a.item, a.index))
+    .slice(0, limit)
+    .map(({ item }) => item)
+}
+
+function artifactTitle(item, fallback) {
+  return item?.summary || item?.title || item?.feature_filename || item?.script_id || fallback
+}
+
 export function DashboardPage() {
   const nav = useNavigate()
   const [counts, setCounts] = useState({ journeys: 0, stories: 0, cases: 0, scripts: 0 })
@@ -34,30 +65,62 @@ export function DashboardPage() {
 
   useEffect(() => {
     let mounted = true
-    Promise.all([api.getJourneys(), api.getUserStories(), api.getTestCases(), api.getTestScripts()]).then(([journeys, stories, testCases, testScripts]) => {
-      if (!mounted) return
-      const journeyItems = journeys.items ?? journeys ?? []
-      const storyItems = stories.items ?? stories ?? []
-      const caseItems = testCases.items ?? testCases ?? []
-      const scriptItems = testScripts.items ?? testScripts ?? []
-      setCounts({
-        journeys: journeyItems.length,
-        stories: storyItems.length,
-        cases: caseItems.length,
-        scripts: scriptItems.length,
+
+    const loadDashboard = () => {
+      setLoading(true)
+      Promise.all([api.getJourneys(), api.getUserStories(), api.getTestCases(), api.getTestScripts()]).then(([journeys, stories, testCases, testScripts]) => {
+        if (!mounted) return
+        const journeyItems = toItems(journeys)
+        const journeyIds = new Set(journeyItems.map((journey) => journey.journey_id).filter(Boolean))
+        const rawStoryItems = toItems(stories)
+        const storyItems = rawStoryItems.filter((story) => story.journey_id && journeyIds.has(story.journey_id))
+        const storyIds = new Set(storyItems.map((story) => story.story_id).filter(Boolean))
+        const rawCaseItems = toItems(testCases)
+        const caseItems = rawCaseItems.filter((testCase) => {
+          const journeyMatch = testCase.journey_id && journeyIds.has(testCase.journey_id)
+          const storyMatch = testCase.user_story_id && storyIds.has(testCase.user_story_id)
+          return journeyMatch || storyMatch
+        })
+        const caseIds = new Set(caseItems.map((testCase) => testCase.test_case_id).filter(Boolean))
+        const rawScriptItems = toItems(testScripts)
+        const scriptItems = rawScriptItems.filter((script) => {
+          const journeyMatch = script.journey_id && journeyIds.has(script.journey_id)
+          const storyMatch = script.user_story_id && storyIds.has(script.user_story_id)
+          const caseMatch = script.test_case_id && caseIds.has(script.test_case_id)
+          return journeyMatch || storyMatch || caseMatch
+        })
+        setCounts({
+          journeys: journeyItems.length,
+          stories: storyItems.length,
+          cases: caseItems.length,
+          scripts: scriptItems.length,
+        })
+        setLatest({
+          journeys: newest(journeyItems),
+          stories: newest(storyItems),
+          cases: newest(caseItems),
+          scripts: newest(scriptItems),
+        })
+        setMessage('')
+      }).catch(() => {
+        if (mounted) setMessage('Unable to load dashboard summary.')
+      }).finally(() => {
+        if (mounted) setLoading(false)
       })
-      setLatest({
-        journeys: journeyItems.slice(0, 3),
-        stories: storyItems.slice(0, 3),
-        cases: caseItems.slice(0, 3),
-        scripts: scriptItems.slice(0, 3),
-      })
-    }).catch(() => {
-      if (mounted) setMessage('Unable to load dashboard summary.')
-    }).finally(() => {
-      if (mounted) setLoading(false)
-    })
-    return () => { mounted = false }
+    }
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') loadDashboard()
+    }
+
+    loadDashboard()
+    window.addEventListener('focus', loadDashboard)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      mounted = false
+      window.removeEventListener('focus', loadDashboard)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
   }, [])
 
   const totals = useMemo(() => [
@@ -103,7 +166,7 @@ export function DashboardPage() {
                   <RecentItem
                     key={journey.journey_id}
                     title={journey.journey_title || journey.journey_id}
-                    subtitle={journey.source_url || journey.application_url}
+                    subtitle={journey.source_url || journey.application_url || journey.app_url || 'No source URL captured'}
                     badge={`${journey.steps?.length ?? 0} steps`}
                   />
                 ))}
@@ -113,19 +176,19 @@ export function DashboardPage() {
             )}
           </Card>
 
-          <Card title="Recent Artifacts" subtitle="The most recent story, test case, and script output.">
+          <Card title="Recent Artifacts" subtitle="The newest story, test case, and script output from current storage.">
             <div className="stack">
               <div className="detail-row">
                 <span>Latest Story</span>
-                <strong>{latest.stories[0]?.summary || 'No stories yet'}</strong>
+                <strong>{artifactTitle(latest.stories[0], 'No stories yet')}</strong>
               </div>
               <div className="detail-row">
                 <span>Latest Case</span>
-                <strong>{latest.cases[0]?.title || 'No test cases yet'}</strong>
+                <strong>{artifactTitle(latest.cases[0], 'No test cases yet')}</strong>
               </div>
               <div className="detail-row">
                 <span>Latest Script</span>
-                <strong>{latest.scripts[0]?.script_id || 'No test scripts yet'}</strong>
+                <strong>{artifactTitle(latest.scripts[0], 'No test scripts yet')}</strong>
               </div>
             </div>
           </Card>

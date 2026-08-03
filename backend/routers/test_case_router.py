@@ -1,15 +1,13 @@
 import json
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
 from core.config import STORAGE_DIR
-from routers.configuration_router import _read as read_configuration
 from routers.user_story_router import list_user_stories
-from schemas.configuration_schema import Configuration
 from schemas.test_case_schema import TestCaseGenerateRequest, TestCaseGenerateResponse, TestCaseListResponse
 from services.artifact_file_service import write_json_file, unique_filename
-from services.jira_client_service import JiraClientError, create_test_case_issue
 from services.journey_map_service import list_journeys
 from services.test_case_agent_service import generate_test_cases
 
@@ -34,40 +32,12 @@ def generate(payload: TestCaseGenerateRequest):
     journeys = [j for j in list_journeys() if j['journey_id'] in payload.journey_ids]
     stories = [s for s in list_user_stories()['items'] if s['story_id'] in payload.user_story_ids]
     cases = [item.model_dump() for item in generate_test_cases(journeys, stories)]
-
-    config_data = read_configuration()
-    jira_config = Configuration(**config_data).jira
-    jira_enabled = bool(jira_config.base_url and jira_config.project_key and jira_config.username and jira_config.api_token)
-    synced_count = 0
-    failed_count = 0
-
-    if jira_enabled:
-        for case in cases:
-            try:
-                result = create_test_case_issue(
-                    jira_config,
-                    summary=case.get('title', ''),
-                    description=case.get('description', ''),
-                    labels=['test-case', 'journey', 'automation'],
-                    acceptance_criteria=case.get('expected_results', []),
-                )
-            except JiraClientError as exc:
-                case['sync_status'] = 'local'
-                case['sync_error'] = str(exc)
-                failed_count += 1
-                continue
-
-            case['jira_key'] = result.get('jira_key', '')
-            case['jira_url'] = result.get('jira_url', '')
-            case['jira_issue_type'] = result.get('jira_issue_type', '')
-            case['sync_status'] = 'jira_synced'
-            case['sync_error'] = ''
-            synced_count += 1
-    else:
-        failed_count = len(cases)
+    generated_at = datetime.now(timezone.utc).isoformat()
+    for case in cases:
+        case["generated_at"] = generated_at
 
     _write(cases)
-    return {'items': cases, 'count': len(cases), 'jira_synced_count': synced_count, 'jira_failed_count': failed_count}
+    return {'items': cases, 'count': len(cases)}
 
 
 @router.get('/test-cases', response_model=TestCaseListResponse)
@@ -76,9 +46,25 @@ def list_test_cases():
     return {'items': items, 'count': len(items)}
 
 
+def _combined_test_case_payload(items: list[dict]) -> list[dict]:
+    groups: dict[tuple[str, str], dict] = {}
+    for item in items:
+        key = (str(item.get("user_story_id") or "US"), str(item.get("journey_id") or ""))
+        group = groups.setdefault(key, {"us_id": key[0], "journey_id": key[1], "test_cases": []})
+        case = dict(item)
+        case.setdefault("test_case_type", "Functional")
+        case["test_case_title"] = case.get("test_case_title") or case.get("title", "")
+        case["test_case_description"] = case.get("test_case_description") or case.get("description", "")
+        case["objective"] = case.get("objective") or case.get("journey_objective", "")
+        case["user_story"] = case.get("user_story") or case.get("description") or ""
+        case["generated_date"] = case.get("generated_date") or __import__("datetime").date.today().isoformat()
+        group["test_cases"].append(case)
+    for group in groups.values():
+        group["test_cases_count"] = len(group["test_cases"])
+    return list(groups.values())
 @router.get('/test-cases/download')
 def download_test_cases():
     items = _read()
     filename = unique_filename('test_cases', '.json')
-    path = write_json_file(filename, items)
+    path = write_json_file(filename, _combined_test_case_payload(items))
     return FileResponse(path, filename=filename, media_type='application/json')

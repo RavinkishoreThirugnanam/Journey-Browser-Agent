@@ -7,6 +7,8 @@ from routers.configuration_router import router as configuration_router
 from routers.exploration_router import router as exploration_router
 from routers.export_router import router as export_router
 from routers.journey_router import router as journey_router
+from routers.live_browser_router import router as live_browser_router
+from routers.live_event_router import router as live_event_router
 from routers.pipeline_router import router as pipeline_router
 from routers.reporting_router import router as reporting_router
 from routers.summary_router import router as summary_router
@@ -29,6 +31,8 @@ app.add_middleware(
 
 app.include_router(exploration_router, prefix="/api/v1", tags=["exploration"])
 app.include_router(journey_router, prefix="/api/v1", tags=["journeys"])
+app.include_router(live_browser_router, prefix="/api/v1", tags=["live-browser"])
+app.include_router(live_event_router, prefix="/api/v1", tags=["live-browser-events"])
 app.include_router(configuration_router, prefix="/api/v1", tags=["configuration"])
 app.include_router(user_story_router, prefix="/api/v1", tags=["user-stories"])
 app.include_router(test_case_router, prefix="/api/v1", tags=["test-cases"])

@@ -10,6 +10,9 @@ class AcceptanceCriterion(BaseModel):
 class Story(BaseModel):
     story_id: str = ''
     journey_id: str = ''
+    generated_at: str = ''
+    generation_source: str = ''
+    generation_model: str = ''
     epic: str
     module: str
     summary: str
@@ -17,10 +20,16 @@ class Story(BaseModel):
     acceptance_criteria: list[AcceptanceCriterion] = Field(default_factory=list)
     labels: list[str] = Field(default_factory=list)
     component: str = 'Browser Agent'
+    jira_key: str = ""
+    jira_url: str = ""
+    jira_sync_status: str = "local"
 
 
 class StoryBundle(BaseModel):
     stories: list[Story] = Field(default_factory=list)
+    generation_source: str = ''
+    generation_model: str = ''
+    generation_warning: str = ''
 
 
 class UserStoryGenerateRequest(BaseModel):

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+﻿from pydantic import BaseModel, Field
 
 
 class JiraConfiguration(BaseModel):
@@ -21,6 +21,15 @@ class LLMConfiguration(BaseModel):
     browser_timeout_screenshot: float = 30.0
     browser_timeout_navigate: float = 30.0
     browser_use_enabled: bool = False
+    browser_use_cdp_url: str = 'http://localhost:9222'
+    browser_use_max_steps: int = 25
+    browser_use_vision: bool = True
+    supervisor_enabled: bool = True
+    browser_agent_prompt: str = ''
+    browser_provider: str = 'playwright'
+    playwright_mcp_enabled: bool = False
+    playwright_mcp_command: str = 'npx'
+    playwright_mcp_args: list[str] = Field(default_factory=lambda: ['-y', '@playwright/mcp@latest'])
 
 
 class ApplicationSettings(BaseModel):
@@ -29,6 +38,7 @@ class ApplicationSettings(BaseModel):
     default_project: str = ""
     global_parameters: dict[str, str] = Field(default_factory=dict)
     browser_headers: dict[str, str] = Field(default_factory=dict)
+    default_follow_links: bool = True
 
 
 class Configuration(BaseModel):
@@ -65,3 +75,4 @@ class LLMConnectionResponse(BaseModel):
     connected: bool
     message: str
     details: dict[str, str] = Field(default_factory=dict)
+

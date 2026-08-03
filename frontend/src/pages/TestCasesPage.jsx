@@ -21,22 +21,25 @@ export function TestCasesPage() {
   const [selectedStories, setSelectedStories] = useState([])
   const [journeyPickerValue, setJourneyPickerValue] = useState('')
   const [message, setMessage] = useState('')
-  const [generationMeta, setGenerationMeta] = useState({ jira_synced_count: 0, jira_failed_count: 0 })
   const [generating, setGenerating] = useState(false)
+  const [previewCase, setPreviewCase] = useState(null)
 
   useEffect(() => {
     api.getJourneys().then((d) => setJourneys(d.items ?? d ?? [])).catch(() => setJourneys([]))
     api.getUserStories().then((d) => setStories(d.items ?? d ?? [])).catch(() => setStories([]))
   }, [])
 
+  const journeyIdOf = (value) => value?.journey_id || value?.source_journey_id || value?.journey?.journey_id || ''
+  const storyIdOf = (value) => value?.story_id || value?.user_story_id || value?.story?.story_id || ''
+
   const selectedJourneySet = useMemo(() => new Set(selectedJourneys), [selectedJourneys])
   const selectedStorySet = useMemo(() => new Set(selectedStories), [selectedStories])
-  const selectedJourneyItems = useMemo(() => journeys.filter((journey) => selectedJourneySet.has(journey.journey_id)), [journeys, selectedJourneySet])
-  const availableJourneyCount = journeys.filter((journey) => !selectedJourneySet.has(journey.journey_id)).length
+  const selectedJourneyItems = useMemo(() => journeys.filter((journey) => selectedJourneySet.has(journeyIdOf(journey))), [journeys, selectedJourneySet])
+  const availableJourneyCount = journeys.filter((journey) => !selectedJourneySet.has(journeyIdOf(journey))).length
 
   const storiesByJourney = useMemo(() => {
     return stories.reduce((acc, story) => {
-      const journeyId = story.journey_id || 'unknown'
+      const journeyId = journeyIdOf(story) || 'unknown'
       if (!acc[journeyId]) acc[journeyId] = []
       acc[journeyId].push(story)
       return acc
@@ -45,21 +48,26 @@ export function TestCasesPage() {
 
   const selectedJourneyStories = useMemo(() => {
     if (!selectedJourneys.length) return []
-    return stories.filter((story) => selectedJourneySet.has(story.journey_id))
+    return stories.filter((story) => selectedJourneySet.has(journeyIdOf(story)))
   }, [stories, selectedJourneys, selectedJourneySet])
 
   const selectedStoryItems = useMemo(() => {
-    return stories.filter((story) => selectedStorySet.has(story.story_id))
+    return stories.filter((story) => selectedStorySet.has(storyIdOf(story)))
   }, [stories, selectedStorySet])
 
+  const journeyScopedTestCases = useMemo(() => {
+    if (!selectedJourneys.length) return []
+    return items.filter((item) => selectedJourneySet.has(journeyIdOf(item)))
+  }, [items, selectedJourneys, selectedJourneySet])
+
   const visibleTestCases = useMemo(() => {
-    if (!selectedStories.length) return []
-    return items.filter((item) => selectedStorySet.has(item.user_story_id))
-  }, [items, selectedStories, selectedStorySet])
+    if (!selectedStories.length) return journeyScopedTestCases
+    return journeyScopedTestCases.filter((item) => selectedStorySet.has(storyIdOf(item)))
+  }, [journeyScopedTestCases, selectedStories, selectedStorySet])
 
   const testCasesByStory = useMemo(() => {
     return visibleTestCases.reduce((acc, item) => {
-      const storyId = item.user_story_id || 'unknown'
+      const storyId = storyIdOf(item) || 'unknown'
       if (!acc[storyId]) acc[storyId] = []
       acc[storyId].push(item)
       return acc
@@ -112,6 +120,14 @@ export function TestCasesPage() {
     ))
   }
 
+  useEffect(() => {
+    if (!previewCase) return undefined
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setPreviewCase(null)
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [previewCase])
   const generate = async () => {
     setMessage('')
     if (!selectedJourneys.length) {
@@ -126,10 +142,6 @@ export function TestCasesPage() {
     try {
       const journeyIdsForStories = [...new Set(selectedStoryItems.map((story) => story.journey_id).filter(Boolean))]
       const result = await api.generateTestCases({ journey_ids: journeyIdsForStories, user_story_ids: selectedStories })
-      setGenerationMeta({
-        jira_synced_count: result?.jira_synced_count ?? 0,
-        jira_failed_count: result?.jira_failed_count ?? 0,
-      })
       setMessage(`Generated ${result?.count ?? 0} test cases for ${selectedStories.length} selected user stories.`)
       await refetch()
     } catch {
@@ -139,163 +151,216 @@ export function TestCasesPage() {
     }
   }
 
+  const storyJourney = (story) => journeys.find((journey) => journeyIdOf(journey) === journeyIdOf(story))
+  const caseStory = (testCase) => stories.find((story) => storyIdOf(story) === storyIdOf(testCase))
+  const caseJourney = (testCase) => journeys.find((journey) => journeyIdOf(journey) === journeyIdOf(testCase))
+  const journeysWithoutStories = selectedJourneyItems.filter((journey) => !selectedJourneyStories.some((story) => journeyIdOf(story) === journeyIdOf(journey)))
+
   return (
     <Card
       title="Test Cases"
-      subtitle="Generate structured test cases for selected user stories. Journey maps are used as context only."
+      subtitle="Choose source stories, generate test cases, and review the results in one place."
       actions={<button onClick={refetch} disabled={loading}>{loading ? 'Refreshing...' : 'Refresh'}</button>}
     >
-      <div className="story-command-panel test-case-command-panel story-first-test-panel">
-        <div className="story-command-header">
-          <div>
-            <h3>Generate Test Cases from User Stories</h3>
-            <p>Select journey context, choose the exact user stories, then generate traceable test cases for those stories.</p>
+      <div className="test-case-minimal-shell">
+        <div className="test-case-minimal-toolbar">
+          <div className="test-case-minimal-intro">
+            <div>
+              <span className="eyebrow">Test creation</span>
+              <h3>Choose stories and generate cases</h3>
+              <p>Add journey context, select the relevant stories, then generate traceable test cases.</p>
+            </div>
+            <div className="test-case-minimal-counts" aria-label="Current test case selection">
+              <span><strong>{selectedJourneys.length}</strong> journeys</span>
+              <span><strong>{selectedStories.length}</strong> stories</span>
+              <span><strong>{visibleTestCases.length}</strong> cases</span>
+            </div>
           </div>
-          <Badge tone={selectedStories.length ? 'success' : 'neutral'}>{selectedStories.length} stories selected</Badge>
-        </div>
 
-        <div className="journey-dropdown-layout">
-          <label className="field journey-dropdown-field">
-            <span>Add Journey Context</span>
-            <select value={journeyPickerValue} onChange={addJourneyFromDropdown} disabled={!journeys.length || !availableJourneyCount}>
-              <option value="">{journeys.length ? availableJourneyCount ? 'Choose journey maps to reveal user stories' : 'All journey maps selected' : 'No journey maps available'}</option>
-              {journeys.map((journey) => (
-                <option key={journey.journey_id} value={journey.journey_id} disabled={selectedJourneySet.has(journey.journey_id)}>
-                  {getJourneyLabel(journey)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="journey-dropdown-actions">
-            <button className="secondary-button" onClick={selectAllJourneys} disabled={!journeys.length}>Select All Journeys</button>
-            <button className="secondary-button" onClick={clearSelection} disabled={!selectedJourneys.length && !selectedStories.length}>Clear</button>
+          <div className="test-case-minimal-controls">
+            <label className="field test-case-minimal-picker">
+              <span>Add journey context</span>
+              <select value={journeyPickerValue} onChange={addJourneyFromDropdown} disabled={!journeys.length || !availableJourneyCount}>
+                <option value="">{journeys.length ? availableJourneyCount ? 'Choose a journey map' : 'All journey maps selected' : 'No journey maps available'}</option>
+                {journeys.map((journey) => (
+                  <option key={journey.journey_id} value={journey.journey_id} disabled={selectedJourneySet.has(journey.journey_id)}>
+                    {getJourneyLabel(journey)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="test-case-minimal-control-actions">
+              <button type="button" className="secondary-button" onClick={selectAllJourneys} disabled={!journeys.length || !availableJourneyCount}>Select all</button>
+              <button type="button" className="secondary-button" onClick={clearSelection} disabled={!selectedJourneys.length && !selectedStories.length}>Clear</button>
+            </div>
           </div>
-        </div>
 
-        <div className="selected-journey-summary compact-selection-summary">
-          <div className="selected-journey-summary-head">
-            <strong>Selected Journey Context</strong>
-            <span>{selectedJourneys.length ? `${selectedJourneys.length} journey map${selectedJourneys.length > 1 ? 's' : ''}` : 'No journey maps selected'}</span>
-          </div>
           {selectedJourneyItems.length ? (
-            <div className="selected-journey-chips">
+            <div className="test-case-minimal-journeys" aria-label="Selected journeys">
               {selectedJourneyItems.map((journey) => (
-                <button key={journey.journey_id} type="button" className="selected-journey-chip" onClick={() => removeSelectedJourney(journey.journey_id)} title="Remove journey">
+                <button key={journey.journey_id} type="button" onClick={() => removeSelectedJourney(journey.journey_id)} title="Remove journey">
                   <span>{getJourneyLabel(journey)}</span>
-                  <strong>Remove</strong>
+                  <strong aria-hidden="true">×</strong>
                 </button>
               ))}
             </div>
-          ) : (
-            <p className="selected-journey-empty">Choose journey maps to load their generated user stories.</p>
-          )}
+          ) : <p className="test-case-minimal-hint">Add a journey map to reveal its generated user stories.</p>}
+
+          {message ? <div className="test-case-minimal-message"><Badge tone={message.includes('Generated') ? 'success' : 'warning'}>{message}</Badge></div> : null}
         </div>
 
-        <div className="story-command-actions workflow-primary-actions">
-          <button onClick={generate} disabled={generating || loading || !selectedStories.length}>{generating ? 'Generating Test Cases...' : 'Generate Test Cases'}</button>
-          <button className="secondary-button" onClick={selectAllVisibleStories} disabled={!selectedJourneyStories.length}>Select All Stories</button>
-          <button className="secondary-button" onClick={clearStorySelection} disabled={!selectedStories.length}>Clear Stories</button>
-        </div>
-
-        <div className="notification-row">
-          {message && <Badge tone={message.includes('Generated') ? 'success' : 'warning'}>{message}</Badge>}
-          <Badge tone="info">Synced: {generationMeta.jira_synced_count}</Badge>
-          <Badge tone={generationMeta.jira_failed_count ? 'warning' : 'success'}>Local only: {generationMeta.jira_failed_count}</Badge>
-        </div>
-      </div>
-
-      {selectedJourneys.length ? (
-        <Card title="Select User Stories for Test Creation" subtitle="Only stories from selected journey maps are shown. Test cases will be generated only for checked stories.">
-          <div className="story-group-stack test-case-mapping-stack">
-            {selectedJourneyItems.map((journey) => {
-              const journeyStories = storiesByJourney[journey.journey_id] ?? []
-              return (
-                <section key={journey.journey_id} className="story-group test-case-mapping-group">
-                  <div className="story-group-head test-case-mapping-head">
-                    <div>
-                      <h3>{getJourneyLabel(journey)}</h3>
-                      <p>{journey.journey_id}</p>
-                    </div>
-                    <Badge tone={journeyStories.length ? 'success' : 'neutral'}>{journeyStories.length} stories</Badge>
-                  </div>
-                  {journeyStories.length ? (
-                    <div className="story-selection-list">
-                      {journeyStories.map((story) => (
-                        <label key={story.story_id} className={`story-selection-row ${selectedStorySet.has(story.story_id) ? 'story-selection-row-selected' : ''}`}>
-                          <input type="checkbox" checked={selectedStorySet.has(story.story_id)} onChange={() => toggleStory(story.story_id)} />
-                          <div>
-                            <strong>{getStoryLabel(story)}</strong>
-                            <span>{story.story_id}</span>
-                          </div>
-                          <Badge tone="neutral">{story.module || 'User Story'}</Badge>
-                        </label>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="story-empty-inline test-case-story-empty">
-                      <strong>No user stories found for this journey.</strong>
-                      <span>Go back to Step 2 and generate user stories before creating test cases.</span>
-                    </div>
-                  )}
-                </section>
-              )
-            })}
-          </div>
-        </Card>
-      ) : (
-        <EmptyState title="Select journey context" description="Choose one or more journey maps above to reveal the user stories available for test-case generation." />
-      )}
-
-      {selectedStories.length ? (
-        visibleTestCases.length ? (
-          <div className="test-case-results-panel">
-            <Card title="Generated Test Cases by User Story" subtitle="Only test cases linked to selected user stories are shown.">
-              <div className="story-group-stack generated-case-story-stack">
-                {selectedStoryItems.map((story) => {
-                  const storyCases = testCasesByStory[story.story_id] ?? []
-                  return (
-                    <section key={story.story_id} className="story-group test-case-mapping-group">
-                      <div className="story-group-head test-case-mapping-head">
-                        <div>
-                          <h3>{getStoryLabel(story)}</h3>
-                          <p>{story.story_id}</p>
-                        </div>
-                        <Badge tone={storyCases.length ? 'success' : 'neutral'}>{storyCases.length} test cases</Badge>
-                      </div>
-                      {storyCases.length ? (
-                        <Table
-                          columns={['Case ID', 'Title', 'Jira', 'Type']}
-                          rows={storyCases.map((item) => (
-                            <tr key={item.test_case_id}>
-                              <td>{item.test_case_id}</td>
-                              <td>{item.title}</td>
-                              <td>
-                                {item.jira_url ? (
-                                  <a href={item.jira_url} target="_blank" rel="noreferrer">{item.jira_key || 'Open Jira'}</a>
-                                ) : (
-                                  <Badge tone={item.sync_status === 'local' ? 'warning' : 'neutral'}>{item.sync_status || 'local'}</Badge>
-                                )}
-                              </td>
-                              <td>{item.jira_issue_type ? <Badge tone="info">{item.jira_issue_type}</Badge> : <Badge tone="neutral">local</Badge>}</td>
-                            </tr>
-                          ))}
-                        />
-                      ) : (
-                        <div className="story-empty-inline test-case-story-empty">
-                          <strong>No generated test cases yet.</strong>
-                          <span>Click Generate Test Cases to create tests for this story.</span>
-                        </div>
-                      )}
-                    </section>
-                  )
-                })}
+        {selectedJourneys.length ? (
+          <div className="test-case-minimal-workspace">
+            <div className="test-case-minimal-block">
+              <div className="test-case-minimal-heading">
+                <div>
+                  <h3>User stories</h3>
+                  <p>Select only the stories that should produce test cases.</p>
+                </div>
+                <div className="test-case-minimal-actions">
+                  <button type="button" className="secondary-button" onClick={selectAllVisibleStories} disabled={!selectedJourneyStories.length}>Select all stories</button>
+                  <button type="button" className="secondary-button" onClick={clearStorySelection} disabled={!selectedStories.length}>Clear stories</button>
+                  <button type="button" onClick={generate} disabled={generating || loading || !selectedStories.length}>{generating ? 'Generating...' : 'Generate Test Cases'}</button>
+                </div>
               </div>
-            </Card>
+
+              {selectedJourneyStories.length ? (
+                <div className="test-case-minimal-story-list">
+                  {selectedJourneyStories.map((story) => {
+                    const journey = storyJourney(story)
+                    return (
+                      <label key={storyIdOf(story)} className={`test-case-minimal-story-row ${selectedStorySet.has(storyIdOf(story)) ? 'selected' : ''}`}>
+                        <input type="checkbox" checked={selectedStorySet.has(storyIdOf(story))} onChange={() => toggleStory(storyIdOf(story))} />
+                        <div className="test-case-minimal-story-copy">
+                          <strong>{getStoryLabel(story)}</strong>
+                          <span>{storyIdOf(story)}</span>
+                        </div>
+                        <div className="test-case-minimal-story-context">
+                          <small>{getJourneyLabel(journey)}</small>
+                          <Badge tone="neutral">{story.module || 'User Story'}</Badge>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="test-case-minimal-empty">
+                  <strong>No user stories are available for the selected journeys.</strong>
+                  <span>Generate user stories in Step 2, then return here.</span>
+                </div>
+              )}
+
+              {journeysWithoutStories.length && selectedJourneyStories.length ? (
+                <p className="test-case-minimal-note">{journeysWithoutStories.length} selected journey{journeysWithoutStories.length > 1 ? 's have' : ' has'} no generated user stories and {journeysWithoutStories.length > 1 ? 'are' : 'is'} hidden from this list.</p>
+              ) : null}
+            </div>
+
+            <div className="test-case-minimal-divider" />
+
+            <div className="test-case-minimal-block">
+              <div className="test-case-minimal-heading">
+                <div>
+                  <h3>Generated test cases</h3>
+                  <p>{selectedStories.length ? 'Showing cases linked to the selected stories.' : 'Showing all saved cases for the selected journeys.'}</p>
+                </div>
+                <Badge tone={visibleTestCases.length ? 'success' : 'neutral'}>{visibleTestCases.length} cases</Badge>
+              </div>
+
+              {visibleTestCases.length ? (
+                <Table
+                  columns={['Test Case', 'User Story', 'Journey', 'Type', 'Action']}
+                  rows={visibleTestCases.map((item) => {
+                    const story = caseStory(item)
+                    const journey = caseJourney(item)
+                    return (
+                      <tr key={item.test_case_id}>
+                        <td><strong>{item.title}</strong><small>{item.test_case_id}</small></td>
+                        <td>{getStoryLabel(story)}</td>
+                        <td>{getJourneyLabel(journey)}</td>
+                        <td><Badge tone="success">{item.test_case_type || 'Functional'}</Badge></td>
+                        <td><button type="button" className="secondary-button test-case-preview-trigger" onClick={() => setPreviewCase(item)}>Preview</button></td>
+                      </tr>
+                    )
+                  })}
+                />
+              ) : (
+                <div className="test-case-minimal-empty compact">
+                  <strong>No test cases for this selection.</strong>
+                  <span>Select user stories above and generate test cases to see them here.</span>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
-          <div className="test-case-results-empty"><EmptyState title="No test cases for selected stories" description="Generate test cases after choosing the user stories above." /></div>
-        )
-      ) : null}
+          <div className="test-case-minimal-empty test-case-minimal-start">
+            <strong>Select a journey map to begin.</strong>
+            <span>User stories and saved test cases will appear in this workspace.</span>
+          </div>
+        )}
+      </div>
+
+      {previewCase && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewCase(null) }}>
+          <section className="modal-panel test-case-preview-panel" role="dialog" aria-modal="true" aria-labelledby="test-case-preview-title">
+            <div className="modal-head">
+              <div>
+                <span className="eyebrow">Generated Test Case</span>
+                <h3 id="test-case-preview-title">{previewCase.title}</h3>
+                <p>{previewCase.test_case_id}</p>
+              </div>
+              <button type="button" className="secondary-button modal-close-button" onClick={() => setPreviewCase(null)} aria-label="Close test case preview">Close</button>
+            </div>
+            <div className="test-case-preview-meta">
+              <div><span>Type</span><strong>{previewCase.test_case_type || 'Functional'}</strong></div>
+              <div><span>Scenario</span><strong>{previewCase.scenario_type || 'Positive'}</strong></div>
+              <div><span>Priority</span><strong>{previewCase.priority || 'High'}</strong></div>
+              <div><span>Environment</span><strong>{previewCase.environment || 'latest'}</strong></div>
+            </div>
+            <div className="test-case-preview-section">
+              <h4>Purpose &amp; Traceability</h4>
+              <p>{previewCase.description || 'No description provided.'}</p>
+              <dl className="test-case-preview-definition-list">
+                <dt>User story</dt><dd>{previewCase.user_story || '-'}</dd>
+                <dt>Journey objective</dt><dd>{previewCase.journey_objective || '-'}</dd>
+              </dl>
+            </div>
+            <div className="test-case-preview-columns">
+              <div className="test-case-preview-section">
+                <h4>Preconditions</h4>
+                {previewCase.preconditions?.length ? <ol className="test-case-preview-list">{previewCase.preconditions.map((item, index) => <li key={`precondition-${index}`}>{item}</li>)}</ol> : <p>-</p>}
+              </div>
+              <div className="test-case-preview-section">
+                <h4>Postconditions</h4>
+                {previewCase.postconditions?.length ? <ol className="test-case-preview-list">{previewCase.postconditions.map((item, index) => <li key={`postcondition-${index}`}>{item}</li>)}</ol> : <p>-</p>}
+              </div>
+            </div>
+            <div className="test-case-preview-section">
+              <h4>Test Steps</h4>
+              {previewCase.steps?.length ? <ol className="test-case-preview-list">{previewCase.steps.map((item, index) => <li key={`step-${index}`}>{item}</li>)}</ol> : <p>-</p>}
+            </div>
+            <div className="test-case-preview-section">
+              <h4>Expected Results</h4>
+              {previewCase.expected_results?.length ? <ul className="test-case-preview-list">{previewCase.expected_results.map((item, index) => <li key={`expected-${index}`}>{item}</li>)}</ul> : <p>-</p>}
+            </div>
+            {previewCase.automation_steps?.length ? (
+              <div className="test-case-preview-section">
+                <h4>Automation Trace</h4>
+                <div className="test-case-preview-automation-list">
+                  {previewCase.automation_steps.map((step, index) => (
+                    <div key={`automation-${index}`} className="test-case-preview-automation-item">
+                      <strong>{index + 1}. {step.action || 'inspect'} — {step.label || 'element'}</strong>
+                      <code>{step.selector || 'No selector captured'}</code>
+                      {step.destination_url ? <small>{step.destination_url}</small> : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </section>
+        </div>
+      )}
     </Card>
   )
 }
+
+

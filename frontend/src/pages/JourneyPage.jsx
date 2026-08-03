@@ -19,16 +19,177 @@ function formatValue(value) {
   return value
 }
 
+function cleanEvidenceText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim()
+}
+
+function uniqueEvidenceItems(items, limit = 24) {
+  const seen = new Set()
+  return items.filter((item) => {
+    const value = cleanEvidenceText(item)
+    const key = value.toLowerCase()
+    if (!value || value === '-' || seen.has(key)) return false
+    seen.add(key)
+    return true
+  }).slice(0, limit)
+}
+
+function extractDomPageEvidence(html) {
+  if (!html || typeof DOMParser === 'undefined') return { headings: [], descriptions: [], cards: [], ctas: [] }
+  try {
+    const documentNode = new DOMParser().parseFromString(html, 'text/html')
+    const textOf = (element) => cleanEvidenceText(element?.textContent)
+    const headings = uniqueEvidenceItems(
+      Array.from(documentNode.querySelectorAll('main h1, main h2, main h3, h1, h2, h3')).map(textOf),
+      100,
+    )
+    const descriptions = uniqueEvidenceItems(
+      Array.from(documentNode.querySelectorAll('main p, article p, [class*="description"]')).map(textOf).filter((text) => text.length >= 30),
+      100,
+    )
+    const cards = []
+    const cardNodes = documentNode.querySelectorAll('article, [class*="card"], [data-testid*="card"], [data-test*="card"]')
+    Array.from(cardNodes).slice(0, 500).forEach((card) => {
+      const title = textOf(card.querySelector('h2, h3, h4, [class*="title"], strong'))
+      const description = textOf(card.querySelector('p, [class*="description"], [class*="summary"]'))
+      const ctaNode = card.querySelector('a, button, [role="button"]')
+      const cta = textOf(ctaNode)
+      const image = card.querySelector('img')
+      const imageUrl = cleanEvidenceText(image?.getAttribute('src') || image?.getAttribute('data-src') || image?.getAttribute('data-lazy-src'))
+      const imageAlt = cleanEvidenceText(image?.getAttribute('alt'))
+      const destinationUrl = cleanEvidenceText(ctaNode?.getAttribute('href') || card.querySelector('a[href]')?.getAttribute('href'))
+      if (title && title.length <= 220) cards.push({ title, description, cta, imageUrl, imageAlt, destinationUrl })
+    })
+    const uniqueCards = []
+    const cardKeys = new Set()
+    cards.forEach((card) => {
+      const key = `${card.title}|${card.description}`.toLowerCase()
+      if (!cardKeys.has(key)) {
+        cardKeys.add(key)
+        uniqueCards.push(card)
+      }
+    })
+    const ctas = uniqueEvidenceItems(
+      Array.from(documentNode.querySelectorAll('main a, main button, [role="main"] a, [role="main"] button')).map(textOf),
+      200,
+    )
+    return { headings, descriptions, cards: uniqueCards.slice(0, 200), ctas }
+  } catch {
+    return { headings: [], descriptions: [], cards: [], ctas: [] }
+  }
+}
+
+function buildPageEvidence(steps) {
+  const pages = new Map()
+  steps.forEach((step, stepIndex) => {
+    const pageUrl = cleanEvidenceText(step.page_url) || `captured-page-${stepIndex + 1}`
+    if (!pages.has(pageUrl)) {
+      pages.set(pageUrl, {
+        url: pageUrl,
+        title: cleanEvidenceText(step.page_title) || 'Untitled page',
+        stepNumbers: [],
+        interactions: [],
+        headings: [],
+        descriptions: [],
+        cards: [],
+        ctas: [],
+        screenshots: [],
+        domSnapshotCount: 0,
+      })
+    }
+    const page = pages.get(pageUrl)
+    page.stepNumbers.push(step.step_number ?? stepIndex + 1)
+    if ((!page.title || page.title === 'Untitled page') && step.page_title) page.title = cleanEvidenceText(step.page_title)
+    const interactions = Array.isArray(step.interactions) ? step.interactions.filter(Boolean) : []
+    interactions.forEach((interaction) => {
+      page.interactions.push(interaction)
+      const label = cleanEvidenceText(interaction.element_label)
+      const type = cleanEvidenceText(interaction.element_type).toLowerCase()
+      if (label && ['heading', 'h1', 'h2', 'h3', 'title'].includes(type)) page.headings.push(label)
+      if (label && ['card', 'article', 'tile'].includes(type)) page.cards.push({ title: label, description: cleanEvidenceText(interaction.value), cta: '' })
+      if (label && ['a', 'link', 'button', 'menuitem'].includes(type)) page.ctas.push(label)
+      const visibleElements = Array.isArray(interaction.visible_elements) ? interaction.visible_elements : []
+      visibleElements.forEach((item) => {
+        const visibleLabel = cleanEvidenceText(item?.label || item?.text || item?.name)
+        const visibleType = cleanEvidenceText(item?.type).toLowerCase()
+        if (!visibleLabel) return
+        if (/heading|title/.test(visibleType)) page.headings.push(visibleLabel)
+        else if (/card|article|tile/.test(visibleType)) page.cards.push({ title: visibleLabel, description: '', cta: '' })
+        else if (/link|button|cta/.test(visibleType)) page.ctas.push(visibleLabel)
+      })
+      const domHtml = interaction.dom_snapshot_after || interaction.dom_snapshot_before || ''
+      if (domHtml) {
+        page.domSnapshotCount += 1
+        const domEvidence = extractDomPageEvidence(domHtml)
+        page.headings.push(...domEvidence.headings)
+        page.descriptions.push(...domEvidence.descriptions)
+        page.cards.push(...domEvidence.cards)
+        page.ctas.push(...domEvidence.ctas)
+      }
+      if (interaction.screenshot_before) page.screenshots.push(interaction.screenshot_before)
+      if (interaction.screenshot_after) page.screenshots.push(interaction.screenshot_after)
+    })
+  })
+  return Array.from(pages.values()).map((page) => {
+    const cardKeys = new Set()
+    const cards = page.cards.filter((card) => {
+      const title = cleanEvidenceText(card?.title)
+      const description = cleanEvidenceText(card?.description)
+      const key = `${title}|${description}`.toLowerCase()
+      if (!title || cardKeys.has(key)) return false
+      cardKeys.add(key)
+      return true
+    }).slice(0, 200)
+    return {
+      ...page,
+      stepNumbers: [...new Set(page.stepNumbers)],
+      headings: uniqueEvidenceItems(page.headings, 100),
+      descriptions: uniqueEvidenceItems(page.descriptions, 100),
+      cards,
+      ctas: uniqueEvidenceItems(page.ctas, 200),
+      screenshots: uniqueEvidenceItems(page.screenshots, 50),
+    }
+  })
+}
+function interactionToLiveEvent(interaction, step, index) {
+  const statusByAction = {
+    open: 'Loaded',
+    click: interaction.element_state_after === 'error' ? 'Failed' : 'Clicked',
+    inspect: 'Observed',
+    fill: 'Filled',
+    select: 'Selected',
+    scroll: 'Scrolled',
+  }
+  return {
+    timestamp: interaction.event_timestamp || index,
+    type: `persisted_${interaction.action || 'interaction'}`,
+    status: statusByAction[interaction.action] || 'Captured evidence',
+    url: interaction.page_url || step.page_url,
+    title: step.page_title,
+    element: interaction.element_label || interaction.element_type,
+    tag: interaction.element_type,
+    role: interaction.role,
+    selector: interaction.selector,
+    destination_url: interaction.destination_url,
+    result: interaction.resulted_in,
+    coordinates: interaction.coordinates,
+    network_count: interaction.network_events?.length ?? 0,
+    screenshot_after: interaction.screenshot_after,
+    dom_snapshot_captured: Boolean(interaction.dom_snapshot_before || interaction.dom_snapshot_after),
+    replay_selector: interaction.replay?.selector,
+  }
+}
 const detailTabs = [
   { id: 'journey-detail', label: 'Journey Details' },
   { id: 'visualization', label: 'Journey Visualization' },
-  { id: 'enrichment', label: 'Payload & UI Elements' },
-  { id: 'flow-details', label: 'Steps & Interactions' },
+  { id: 'live-browser', label: 'Live Browser Session' },
+  { id: 'flow-details', label: 'Page Evidence' },
 ]
 
 export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
   const [data, setData] = useState([])
   const [selected, setSelected] = useState('')
+  const [selectedForDelete, setSelectedForDelete] = useState([])
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
@@ -37,13 +198,24 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
   const [svg, setSvg] = useState('')
   const [vizLoading, setVizLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('journey-detail')
+  const [liveStatus, setLiveStatus] = useState('')
+  const [liveEvents, setLiveEvents] = useState([])
+  const [replayEvents, setReplayEvents] = useState([])
+  const [replayIndex, setReplayIndex] = useState(-1)
+  const [replayPlaying, setReplayPlaying] = useState(false)
   const detailRef = useRef(null)
+  const liveTimelineRef = useRef(null)
+  const selectedRef = useRef('')
+  const vizRequestRef = useRef(0)
 
   const load = async () => {
     setLoading(true)
     try {
       const response = await api.getJourneys()
-      setData(response.items ?? response ?? [])
+      const journeys = response.items ?? response ?? []
+      setData(journeys)
+      const availableIds = new Set(journeys.map((journey) => journey.journey_id))
+      setSelectedForDelete((current) => current.filter((journeyId) => availableIds.has(journeyId)))
     } finally {
       setLoading(false)
     }
@@ -52,15 +224,23 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
   useEffect(() => { load() }, [refreshKey])
 
   useEffect(() => {
-    if (!selected) return
+    selectedRef.current = selected
     setVizJourneyId(selected)
+    setMermaidText('')
+    setSvg('')
+    setLiveEvents([])
+    setReplayEvents([])
+    setReplayIndex(-1)
+    setReplayPlaying(false)
+    setLiveStatus('')
+    vizRequestRef.current += 1
   }, [selected])
 
   useEffect(() => {
-    if (!detail || activeTab !== 'visualization' || !selected) return
-    if (vizJourneyId === selected && (mermaidText || svg)) return
-    generateVisualization({ preventDefault: () => {} })
-  }, [activeTab, detail, selected, vizJourneyId])
+    if (!detail || activeTab !== 'visualization' || !selected || vizLoading) return
+    if (vizJourneyId === selected && svg) return
+    generateVisualization({ preventDefault: () => {} }, selected)
+  }, [activeTab, detail?.journey_id, selected, vizJourneyId, svg, vizLoading])
 
   useEffect(() => {
     if (initialSelectedId) setSelected(initialSelectedId)
@@ -80,19 +260,59 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
     }).catch(() => setDetail(null))
   }, [selected])
 
-  const generateVisualization = async (e) => {
+  useEffect(() => {
+    if (activeTab !== 'live-browser' || !detail) return
+    setLiveStatus('Connecting to the live browser...')
+  }, [activeTab, detail?.journey_id])
+  useEffect(() => {
+    if (activeTab !== 'live-browser' || !detail) return
+    const url = detail.starting_url || detail.source_url || detail.application_url
+    if (!url) return
+    let cancelled = false
+    const source = new EventSource(api.liveEventsUrl(url))
+    source.onmessage = (event) => {
+      try {
+        const next = JSON.parse(event.data)
+        setLiveEvents((current) => [...current, next].slice(-300))
+        if (next.status) setLiveStatus(next.status)
+      } catch {
+        // Ignore malformed keep-alive payloads.
+      }
+    }
+    source.onerror = () => source.close()
+    // Do not reset a completed run when the user opens this tab. The noVNC
+    // viewport is shared with the crawl and should remain on its last page.
+    // Only initialize an empty live session when there is no persisted run.
+    const hasPersistedRun = Array.isArray(detail.steps) && detail.steps.some((step) => Array.isArray(step?.interactions) && step.interactions.length)
+    if (!hasPersistedRun && !liveEvents.length) {
+      api.navigateLiveBrowser({ url }).then((result) => {
+        if (!cancelled) setLiveStatus(result.title || 'Base page loaded')
+      }).catch((error) => {
+        if (!cancelled) setLiveStatus('Live browser unavailable: ' + (error.message || 'navigation failed'))
+      })
+    } else {
+      setLiveStatus('Recorded run ready. Use Replay captured journey to review it from the beginning.')
+    }
+    return () => { cancelled = true; source.close() }
+  }, [activeTab, detail?.journey_id])
+  const generateVisualization = async (e, journeyIdOverride = '') => {
     e?.preventDefault?.()
-    if (!vizJourneyId) {
+    const targetJourneyId = journeyIdOverride || selected || vizJourneyId
+    if (!targetJourneyId) {
       setMessage('Select a journey to visualize.')
       return
     }
+    const requestId = ++vizRequestRef.current
     setVizLoading(true)
     setMessage('')
     setSvg('')
+    setMermaidText('')
     try {
-      const result = await api.visualizeJourney({ journey_id: vizJourneyId })
+      const result = await api.visualizeJourney({ journey_id: targetJourneyId })
+      const svgMarkup = await renderMermaid(`journey-viz-${targetJourneyId}-${Date.now()}`, result.mermaid)
+      if (requestId !== vizRequestRef.current || selectedRef.current !== targetJourneyId) return
+      setVizJourneyId(targetJourneyId)
       setMermaidText(result.mermaid)
-      const svgMarkup = await renderMermaid(`journey-viz-${Date.now()}`, result.mermaid)
       setSvg(svgMarkup)
       setActiveTab('visualization')
       setMessage('Journey visualization generated.')
@@ -102,7 +322,7 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
     } catch {
       setMessage('Unable to generate the visual representation.')
     } finally {
-      setVizLoading(false)
+      if (requestId === vizRequestRef.current) setVizLoading(false)
     }
   }
 
@@ -112,6 +332,7 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
     if (!confirmed) return
     try {
       await api.deleteJourney(journeyId)
+      setSelectedForDelete((current) => current.filter((id) => id !== journeyId))
       if (selected === journeyId) {
         setSelected('')
         setDetail(null)
@@ -123,6 +344,41 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
     }
   }
 
+  const toggleJourneyForDelete = (journeyId) => {
+    setSelectedForDelete((current) => (
+      current.includes(journeyId)
+        ? current.filter((id) => id !== journeyId)
+        : [...current, journeyId]
+    ))
+  }
+
+  const toggleAllJourneysForDelete = () => {
+    setSelectedForDelete((current) => (
+      current.length === data.length ? [] : data.map((journey) => journey.journey_id)
+    ))
+  }
+
+  const deleteSelectedJourneys = async () => {
+    if (!selectedForDelete.length) return
+    setMessage('')
+    const count = selectedForDelete.length
+    const confirmed = window.confirm(`Delete ${count} selected journey ${count === 1 ? 'discovery' : 'discoveries'}? This cannot be undone.`)
+    if (!confirmed) return
+    try {
+      const deletingIds = [...selectedForDelete]
+      const result = await api.deleteJourneys(deletingIds)
+      if (deletingIds.includes(selected)) {
+        setSelected('')
+        setDetail(null)
+      }
+      setSelectedForDelete([])
+      await load()
+      setMessage(`${result.deleted_count ?? count} selected journey ${count === 1 ? 'discovery' : 'discoveries'} deleted successfully.`)
+    } catch {
+      setMessage('Unable to delete the selected journey discoveries.')
+    }
+  }
+
   const deleteJourneys = async () => {
     setMessage('')
     const confirmed = window.confirm('Delete all journey discoveries? This cannot be undone.')
@@ -130,6 +386,7 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
     try {
       await api.resetJourneys()
       setSelected('')
+      setSelectedForDelete([])
       setDetail(null)
       await load()
       setMessage('Journey discoveries deleted successfully.')
@@ -138,7 +395,9 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
     }
   }
 
-  const steps = detail?.steps ?? []
+  // Keep all derived journey/live state behind defensive defaults. Details are
+  // loaded asynchronously and older stored journeys can contain sparse steps.
+  const steps = Array.isArray(detail?.steps) ? detail.steps.filter(Boolean) : []
   const metadata = detail?.exploration_metadata ?? detail?.explorationMetadata ?? {
     app_url: detail?.app_url ?? detail?.starting_url ?? detail?.source_url ?? '',
     starting_feature: detail?.starting_feature ?? detail?.starting_point ?? '',
@@ -150,16 +409,131 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
     exploration_timestamp: detail?.exploration_timestamp ?? '',
   }
 
-  const uiElements = detail?.page_url_ui_element_section?.ui_elements_data ?? detail?.ui_elements_data ?? []
-  const browserJourneys = detail?.browser_agent_section?.browser_agent_data?.journeys ?? []
+  const rawUiElements = Array.isArray(detail?.page_url_ui_element_section?.ui_elements_data)
+    ? detail.page_url_ui_element_section.ui_elements_data
+    : (Array.isArray(detail?.ui_elements_data) ? detail.ui_elements_data : [])
+  const uiElements = rawUiElements.length ? rawUiElements : steps.map((step) => ({
+    page_url: step.page_url,
+    source_file: null,
+    is_login_flow_context: Boolean((Array.isArray(step.interactions) ? step.interactions : []).filter(Boolean).some((interaction) => interaction.iframe_context || /login/i.test(interaction.parent_component || ''))),
+    extracted_url_ui_elements: { page: { total_elements: Array.isArray(step.interactions) ? step.interactions.length : 0, elements: Array.isArray(step.interactions) ? step.interactions : [] } },
+  }))
+  const browserJourneys = detail?.browser_agent_section?.browser_agent_data?.journeys?.length
+    ? detail.browser_agent_section.browser_agent_data.journeys
+    : (detail ? [{ journey_id: detail.journey_id, steps }] : [])
   const selectedJourney = data.find((item) => item.journey_id === selected) || null
+  const pageEvidence = useMemo(() => buildPageEvidence(steps), [detail?.steps])
+  const persistedLiveEvents = useMemo(() => steps.flatMap((step) => (
+    Array.isArray(step.interactions)
+      ? step.interactions.filter(Boolean).map((interaction, index) => interactionToLiveEvent(interaction, step, index))
+      : []
+  )), [steps])
+  const replayInteractions = useMemo(() => steps.flatMap((step) => (
+    Array.isArray(step.interactions)
+      ? step.interactions.filter(Boolean).map((interaction) => ({
+        action: interaction.action || 'inspect',
+        element: interaction.element_label || interaction.element_type || '',
+        element_id: interaction.element_id || '',
+        selector: interaction.selector || '',
+        replay_selector: interaction.replay?.selector || interaction.selector || '',
+        value: interaction.value || '',
+        page_url: interaction.page_url || step.page_url || '',
+        destination_url: interaction.destination_url || '',
+        coordinates: interaction.coordinates || {},
+      }))
+      : []
+  )), [steps])
+  const liveActivityEvents = useMemo(() => {
+    const merged = [
+      ...(Array.isArray(persistedLiveEvents) ? persistedLiveEvents : []),
+      ...(Array.isArray(liveEvents) ? liveEvents : []),
+    ].filter(Boolean)
+    const unique = merged.filter((event, index, all) => {
+      const key = [event.type, event.timestamp, event.sequence || index, event.url, event.element].join('|')
+      return all.findIndex((candidate, candidateIndex) => [candidate.type, candidate.timestamp, candidate.sequence || candidateIndex, candidate.url, candidate.element].join('|') === key) === index
+    })
+    return unique.sort((left, right) => {
+      const leftSequence = Number(left.sequence)
+      const rightSequence = Number(right.sequence)
+      if (Number.isFinite(leftSequence) && Number.isFinite(rightSequence) && leftSequence !== rightSequence) return leftSequence - rightSequence
+      const leftTime = Date.parse(left.timestamp) || Number(left.timestamp) || 0
+      const rightTime = Date.parse(right.timestamp) || Number(right.timestamp) || 0
+      return leftTime - rightTime
+    })
+  }, [persistedLiveEvents, liveEvents])
+  const latestLiveEvent = liveActivityEvents[liveActivityEvents.length - 1] || null
+  const lastClickEvent = [...liveActivityEvents].reverse().find((event) => event.type === 'click_started' || event.type === 'click_completed' || event.type === 'clicking' || event.type === 'persisted_click') || null
+  const lastScanEvent = [...liveActivityEvents].reverse().find((event) => event.type === 'page_scanned' || event.type === 'persisted_inspect') || null
+  const lastTargetEvent = [...liveActivityEvents].reverse().find((event) => event.type === 'target_selected') || null
+  const liveEventTone = (event) => {
+    const status = String(event?.status || '').toLowerCase()
+    if (status.includes('failed') || status.includes('unavailable')) return 'danger'
+    if (status.includes('completed') || status.includes('loaded') || status.includes('navigated')) return 'success'
+    if (status.includes('click') || status.includes('target') || status.includes('planning') || status.includes('waiting')) return 'warning'
+    return 'info'
+  }
 
+  useEffect(() => {
+    if (!replayPlaying || replayIndex < 0 || replayIndex >= replayEvents.length) return undefined
+    const timer = window.setTimeout(() => {
+      if (replayIndex >= replayEvents.length - 1) {
+        setReplayPlaying(false)
+        setLiveStatus('Recorded replay complete.')
+      } else {
+        setReplayIndex((index) => index + 1)
+      }
+    }, 900)
+    return () => window.clearTimeout(timer)
+  }, [replayPlaying, replayIndex, replayEvents.length])
+
+  const replayCapturedJourney = () => {
+    // Snapshot the sequence once so streaming events cannot shift event 1.
+    const sourceEvents = persistedLiveEvents.length ? persistedLiveEvents : liveActivityEvents
+    if (!sourceEvents.length) {
+      setLiveStatus('No captured events are available to replay.')
+      return
+    }
+    const snapshot = [...sourceEvents]
+    const replayPayload = replayInteractions.length ? replayInteractions : snapshot.map((event) => ({
+      action: event.recorded_action || (String(event.type || '').includes('click') ? 'click' : 'inspect'),
+      element: event.element || event.title || '',
+      selector: event.selector || '',
+      replay_selector: event.selector || '',
+      value: event.value || '',
+      page_url: event.url || '',
+      destination_url: event.destination_url || '',
+      coordinates: event.coordinates || {},
+    }))
+    setReplayEvents(snapshot)
+    setReplayIndex(0)
+    setReplayPlaying(snapshot.length > 1)
+    setLiveStatus(`Replaying captured journey: event 1 of ${snapshot.length}.`)
+    setLiveEvents([])
+    const url = detail?.starting_url || detail?.source_url || detail?.application_url
+    if (url) {
+      api.replayLiveBrowser({ url, events: replayPayload }).catch((error) => {
+        setReplayPlaying(false)
+        setLiveStatus('Recorded replay unavailable: ' + (error.message || 'browser replay failed'))
+      })
+    }
+  }
   const rows = data.map((j) => (
-    <tr key={j.journey_id} onClick={() => setSelected(j.journey_id)} className={selected === j.journey_id ? 'row-selected' : ''}>
-      <td><input type="radio" name="journey" checked={selected === j.journey_id} onChange={() => setSelected(j.journey_id)} /></td>
+    <tr
+      key={j.journey_id}
+      onClick={() => setSelected(j.journey_id)}
+      className={`${selected === j.journey_id ? 'row-selected' : ''} ${selectedForDelete.includes(j.journey_id) ? 'row-marked-for-delete' : ''}`.trim()}
+    >
+      <td>
+        <input
+          type="checkbox"
+          aria-label={`Select journey ${j.journey_id} for deletion`}
+          checked={selectedForDelete.includes(j.journey_id)}
+          onClick={(event) => event.stopPropagation()}
+          onChange={() => toggleJourneyForDelete(j.journey_id)}
+        />
+      </td>
       <td>{j.journey_id}</td>
-      <td>{j.application_url}</td>
-      <td>{j.starting_url ?? j.application_url}</td>
+      <td>{j.starting_url || j.source_url || j.application_url || '-'}</td>
       <td><Badge tone="info">{j.steps?.length ?? 0} steps</Badge></td>
       <td><Badge tone="neutral">{j.events?.length ?? 0} events</Badge></td>
       <td>
@@ -192,6 +566,8 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
       const sourceUrl = detail.source_url || selectedJourney?.source_url || selectedJourney?.application_url
       const viewport = metadata.viewport?.width ? `${metadata.viewport.width} x ${metadata.viewport.height}` : formatValue(metadata.viewport)
       const outcomeTone = String(detail.outcome || '').toLowerCase().includes('complete') ? 'success' : 'info'
+      const captureSource = detail.test_hints?.capture_source || metadata.browser || 'unknown'
+      const captureError = detail.test_hints?.playwright_error || detail.test_hints?.browser_use_error || ''
 
       return (
         <section className="journey-report journey-report-compact">
@@ -203,7 +579,10 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
             </div>
             <Badge tone={outcomeTone}>{detail.outcome || 'Discovered'}</Badge>
           </div>
-
+          <div className={captureError ? 'journey-capture-alert danger' : 'journey-capture-alert'}>
+            <strong>Capture source:</strong> {captureSource}
+            {captureError ? <span> Browser automation did not run: {captureError}</span> : <span> Detailed browser evidence is available in Steps &amp; Interactions.</span>}
+          </div>
           <div className="journey-report-meta">
             <div>
               <span>Journey ID</span>
@@ -223,6 +602,11 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
             </div>
           </div>
 
+          <div className="journey-evidence-summary">
+            <div><span>Exploration ID</span><strong>{formatValue(detail.exploration_metadata?.exploration_id || detail.test_hints?.exploration_id)}</strong></div>
+            <div><span>Evidence page IDs</span><strong>{detail.test_hints?.page_ids?.length ?? steps.length}</strong></div>
+            <div><span>Interaction event IDs</span><strong>{detail.test_hints?.event_ids?.length ?? steps.reduce((total, step) => total + (step.interactions?.length ?? 0), 0)}</strong></div>
+          </div>
           <div className="journey-markdown-grid">
             <div className="journey-report-section">
               <h3>Starting Context</h3>
@@ -270,11 +654,11 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
               <h2>Journey Visualization</h2>
               <p>Auto-generated from the selected journey map.</p>
             </div>
-            <button className="secondary-button" onClick={() => api.downloadMermaid(vizJourneyId || selected)} disabled={!(vizJourneyId || selected)}>Download `mermaid` file</button>
+            <button className="secondary-button" onClick={() => api.downloadMermaid(selected)} disabled={!selected || vizJourneyId !== selected || !svg}>Download `mermaid` file</button>
           </div>
           {vizLoading && <div className="empty-state journey-viz-loading">Generating visual representation...</div>}
           {svg ? (
-            <div className="mermaid-panel journey-mermaid-canvas" dangerouslySetInnerHTML={{ __html: svg }} />
+            <div key={vizJourneyId} className="mermaid-panel journey-mermaid-canvas" dangerouslySetInnerHTML={{ __html: svg }} />
           ) : (
             <div className="empty-state journey-viz-loading">Open this tab after selecting a journey to generate the flowchart.</div>
           )}
@@ -282,32 +666,146 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
       )
     }
 
+    if (activeTab === 'live-browser') {
+      const streamUrl = import.meta.env.VITE_BROWSER_STREAM_URL || ''
+      return (
+        <section className="journey-report journey-report-compact live-browser-panel">
+          <div className="journey-report-header">
+            <div>
+              <p className="journey-report-kicker">Browser Agent Monitor</p>
+              <h2>Live Browser Session</h2>
+              <p>Watch the browser agent navigate the selected application. Structured clicks and navigation evidence remain available in Steps &amp; Interactions.</p>
+            </div>
+            <Badge tone="success">Stream preview</Badge>
+          </div>
+          <div className="live-browser-notice">
+            <strong>Live session preview</strong>
+            <span>If the target blocks direct embedding, the browser stream will still appear here when the noVNC service is running.</span>
+            {liveStatus && <span className="live-browser-status">{liveStatus}</span>}
+          </div>
+          <div className="live-replay-toolbar">
+            <div>
+              <span className="journey-report-kicker">Recorded evidence replay</span>
+              <strong>{replayIndex >= 0 ? `Event ${replayIndex + 1} of ${replayEvents.length}` : 'Review the run from the beginning'}</strong>
+              <small>VNC shows the current browser state. Replay uses the captured journey history.</small>
+            </div>
+            <div className="live-replay-actions">
+              <button type="button" className="secondary-button" onClick={replayCapturedJourney} disabled={!liveActivityEvents.length}>Replay captured journey</button>
+              <button type="button" className="secondary-button" onClick={() => setReplayPlaying((playing) => !playing)} disabled={replayIndex < 0 || replayIndex >= replayEvents.length - 1}>{replayPlaying ? 'Pause' : 'Play'}</button>
+              <button type="button" className="secondary-button" onClick={() => setReplayIndex((index) => Math.max(0, index - 1))} disabled={replayIndex <= 0}>Previous</button>
+              <button type="button" className="secondary-button" onClick={() => setReplayIndex((index) => Math.min(replayEvents.length - 1, index + 1))} disabled={replayIndex < 0 || replayIndex >= replayEvents.length - 1}>Next</button>
+            </div>
+          </div>
+          {replayIndex >= 0 && replayEvents[replayIndex] ? (
+            <div className="live-replay-event">
+              <Badge tone={liveEventTone(replayEvents[replayIndex])}>Recorded event {replayIndex + 1}</Badge>
+              <strong>{replayEvents[replayIndex].element || replayEvents[replayIndex].title || replayEvents[replayIndex].type}</strong>
+              <span>{replayEvents[replayIndex].result || replayEvents[replayIndex].destination_url || replayEvents[replayIndex].url || '-'}</span>
+              <code>{replayEvents[replayIndex].selector || replayEvents[replayIndex].href || '-'}</code>
+            </div>
+          ) : null}
+          <div className="live-browser-frame-wrap">
+            {streamUrl ? (
+              <div className="live-browser-stage">
+              <iframe
+                key={`${selected}-${streamUrl}`}
+                title="Live browser agent session"
+                src={streamUrl}
+                className="live-browser-frame"
+                tabIndex={-1}
+                aria-label="Read-only browser agent stream"
+                onError={() => setMessage('Live browser stream is unavailable. The journey evidence remains available below.')}
+              />
+              <div className="live-browser-readonly-overlay" aria-hidden="true">
+                <span>Agent-controlled session</span>
+                <small>Read-only preview</small>
+                {liveActivityEvents.filter((event) => event.coordinates?.x !== undefined).slice(-8).map((event, index) => (
+                  <span key={`${event.timestamp}-${index}`} className="live-click-marker" style={{ left: `${(event.coordinates.x / 1280) * 100}%`, top: `${(event.coordinates.y / 800) * 100}%` }} title={event.element || event.action || 'Agent interaction'} />
+                ))}
+              </div>
+              </div>
+            ) : (
+              <div className="live-browser-unavailable">
+                <strong>Live browser stream is not configured</strong>
+                <span>Start the headed browser and noVNC stream, then set <code>VITE_BROWSER_STREAM_URL</code> to its browser URL.</span>
+              </div>
+            )}
+          </div>
+          <div className="live-browser-observability-grid live-browser-observability-grid-rich">
+            <div className="live-browser-current-state">
+              <span className="journey-report-kicker">Agent state</span>
+              <strong>{latestLiveEvent?.status || liveStatus || 'Waiting for activity'}</strong>
+              <span>{latestLiveEvent?.title || detail.starting_url || '-'}</span>
+              <code>{latestLiveEvent?.url || detail.starting_url || '-'}</code>
+            </div>
+            <div className="live-browser-current-state">
+              <span className="journey-report-kicker">Selected target</span>
+              <strong>{lastTargetEvent?.element || lastClickEvent?.element || 'No target selected yet'}</strong>
+              <span>{lastTargetEvent?.selector || lastClickEvent?.selector || '-'}</span>
+              <code>{lastTargetEvent?.expected_destination || lastClickEvent?.destination_url || lastClickEvent?.url || '-'}</code>
+            </div>
+            <div className="live-browser-current-state">
+              <span className="journey-report-kicker">Page inventory</span>
+              <strong>{lastScanEvent?.result || 'Waiting for DOM scan'}</strong>
+              <span>{lastScanEvent?.visible_elements?.slice(0, 4).map((item) => `${item.type}: ${item.label}`).join(' | ') || 'Visible controls will appear here.'}</span>
+              <code>{lastScanEvent?.counts ? JSON.stringify(lastScanEvent.counts) : '-'}</code>
+            </div>
+          </div>
+          <div className="live-browser-timeline-shell">
+            <div className="journey-report-header compact-header">
+              <div>
+                <h3>Live Agent Activity</h3>
+                <p>Click, navigation, page scan, and target-selection events streamed from the backend.</p>
+              </div>
+              <Badge tone={liveActivityEvents.length ? 'success' : 'neutral'}>{liveActivityEvents.length} events</Badge>
+            </div>
+            <div ref={liveTimelineRef} className="live-browser-timeline" aria-label="Live browser event timeline">
+              {liveActivityEvents.length ? liveActivityEvents.map((event, index) => (
+                <div className="live-browser-timeline-item live-browser-timeline-item-rich" key={`${event.timestamp}-${index}`}>
+                  <Badge tone={liveEventTone(event)}>{event.status || event.type}</Badge>
+                  <div>
+                    <strong>{event.element || event.title || event.type}</strong>
+                    <span>{event.result || event.destination_url || event.expected_destination || event.url || '-'}</span>
+                    <small>{event.selector || event.href || event.cdp_url || ''}</small>
+                  </div>
+                  {event.coordinates?.x !== undefined ? <span className="live-coordinate-pill">x {Math.round(event.coordinates.x)}, y {Math.round(event.coordinates.y)}</span> : null}
+                </div>
+              )) : <p>No live events received yet. Start the exploration to observe the agent.</p>}
+            </div>
+          </div>
+          <div className="journey-report-meta">
+            <div><span>Selected journey</span><strong>{formatValue(selectedJourney?.journey_id || selected)}</strong></div>
+            <div><span>Starting URL</span><strong>{formatValue(selectedJourney?.starting_url || detail.starting_url)}</strong></div>
+            <div><span>Captured events</span><strong>{detail.events?.length ?? steps.reduce((total, step) => total + (step.interactions?.length ?? 0), 0)}</strong></div>
+          </div>
+        </section>
+      )
+    }
     if (activeTab === 'enrichment') {
-      const combinedStatus = detail.browser_agent_section ? 'Combined payload available' : 'Legacy journey payload'
+      const combinedStatus = rawUiElements.length ? 'DOM and browser evidence available' : (steps.length ? 'Browser interaction evidence available' : 'Legacy evidence')
 
       return (
         <section className="journey-report journey-report-compact">
           <div className="journey-report-header">
             <div>
               <p className="journey-report-kicker">Step 1.5 Enrichment</p>
-              <h2>Payload & UI Elements</h2>
-              <p>Browser-agent output and DOM/UI element enrichment are combined here so downstream story, test-case, and script generation have the same source context.</p>
+              <h2>Evidence & UI Elements</h2>
+              <p>Shows the evidence package used by downstream story, test-case, and script generation. Separate DOM extraction is clearly marked when available; otherwise the UI evidence is derived from captured browser interactions.</p>
             </div>
-            <Badge tone={detail.browser_agent_section ? 'success' : 'warning'}>{combinedStatus}</Badge>
+            <Badge tone={detail.browser_agent_section || steps.length ? 'success' : 'warning'}>{combinedStatus}</Badge>
           </div>
-
           <div className="journey-report-meta">
             <div>
-              <span>Browser Journeys</span>
+              <span>Journey Records</span>
               <strong>{browserJourneys.length}</strong>
             </div>
             <div>
-              <span>UI Pages</span>
-              <strong>{uiElements.length}</strong>
+              <span>DOM Pages</span>
+              <strong>{rawUiElements.length}</strong>
             </div>
             <div>
-              <span>Payload Type</span>
-              <strong>{detail.browser_agent_section ? 'Nested' : 'Legacy'}</strong>
+              <span>Evidence Mode</span>
+              <strong>{rawUiElements.length ? 'DOM enriched' : (steps.length ? 'Interaction derived' : 'Legacy')}</strong>
             </div>
             <div>
               <span>Selected Journey</span>
@@ -315,42 +813,50 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
             </div>
           </div>
 
+          <div className="journey-evidence-summary">
+            <div><span>Exploration ID</span><strong>{formatValue(detail.exploration_metadata?.exploration_id || detail.test_hints?.exploration_id)}</strong></div>
+            <div><span>Evidence page IDs</span><strong>{detail.test_hints?.page_ids?.length ?? steps.length}</strong></div>
+            <div><span>Interaction event IDs</span><strong>{detail.test_hints?.event_ids?.length ?? steps.reduce((total, step) => total + (step.interactions?.length ?? 0), 0)}</strong></div>
+          </div>
+
+
           <div className="journey-markdown-grid">
             <div className="journey-report-section">
-              <h3>Payload Sections</h3>
+              <h3>Evidence Sections</h3>
               <ul>
-                <li><strong>Browser agent section:</strong> {detail.browser_agent_section ? 'Available' : 'Not available'}</li>
-                <li><strong>Page URL UI element section:</strong> {uiElements.length ? 'Available' : 'No UI pages captured'}</li>
+                <li><strong>Browser interaction evidence:</strong> {detail.browser_agent_section || steps.length ? 'Available' : 'Not available'}</li>
+                <li><strong>Separate DOM/UI extraction:</strong> {rawUiElements.length ? 'Available' : 'Not captured separately; using interaction evidence'}</li>
                 <li><strong>Selected journey:</strong> {formatValue(selectedJourney?.journey_title || selectedJourney?.journey_id || selected)}</li>
               </ul>
             </div>
 
             <div className="journey-report-section">
-              <h3>Enrichment Coverage</h3>
+              <h3>UI Evidence Coverage</h3>
               <ul>
-                <li><strong>Total UI pages:</strong> {uiElements.length}</li>
-                <li><strong>Total extracted elements:</strong> {uiElements.reduce((total, page) => total + (page.extracted_url_ui_elements?.page?.total_elements ?? page.extracted_url_ui_elements?.page?.elements?.length ?? 0), 0)}</li>
+                <li><strong>DOM extraction pages:</strong> {rawUiElements.length}</li>
+                <li><strong>Evidence pages shown:</strong> {uiElements.length}</li>
+                <li><strong>UI evidence items:</strong> {uiElements.reduce((total, page) => total + (page.extracted_url_ui_elements?.page?.total_elements ?? page.extracted_url_ui_elements?.page?.elements?.length ?? 0), 0)}</li>
                 <li><strong>Login-context pages:</strong> {uiElements.filter((page) => page.is_login_flow_context).length}</li>
               </ul>
             </div>
           </div>
 
           <div className="journey-report-section journey-report-table-section">
-            <h3>Journey UI Elements</h3>
+            <h3>Page-Level UI Evidence</h3>
             {uiElements.length ? (
               <Table
-                columns={['Page URL', 'Source File', 'Login Context', 'Elements']}
+                columns={['Page URL', 'Evidence Source', 'Login Context', 'UI Evidence Items']}
                 rows={uiElements.map((page) => (
                   <tr key={page.page_url}>
                     <td>{page.page_url}</td>
-                    <td>{page.source_file || '-'}</td>
+                    <td>{page.source_file || (rawUiElements.length ? 'DOM extraction' : 'Captured interactions')}</td>
                     <td>{String(page.is_login_flow_context)}</td>
                     <td>{page.extracted_url_ui_elements?.page?.total_elements ?? page.extracted_url_ui_elements?.page?.elements?.length ?? 0}</td>
                   </tr>
                 ))}
               />
             ) : (
-              <p>No UI enrichment pages were captured for this journey.</p>
+              <p>No separate DOM/UI extraction file was captured for this journey. The table above may still show page-level evidence derived from browser interactions; full click and navigation details are in Steps &amp; Interactions.</p>
             )}
           </div>
         </section>
@@ -358,108 +864,192 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
     }
 
     if (activeTab === 'flow-details') {
+      const capturedTitleCount = pageEvidence.reduce((total, page) => total + page.headings.length, 0)
+      const capturedCardCount = pageEvidence.reduce((total, page) => total + page.cards.length, 0)
+      const evidencedPageCount = pageEvidence.filter((page) => page.domSnapshotCount || page.screenshots.length).length
+
       return (
-        <section className="journey-report journey-report-compact">
+        <section className="journey-report journey-report-compact page-evidence-report">
           <div className="journey-report-header">
             <div>
-              <p className="journey-report-kicker">Journey Flow</p>
-              <h2>Steps & Interactions</h2>
-              <p>Ordered journey steps and the detailed UI interactions captured inside each step are shown together for traceability.</p>
+              <p className="journey-report-kicker">Exploration Report</p>
+              <h2>Page Evidence</h2>
+              <p>Each explored URL is shown once with the useful content captured from that page. Technical automation data is available only when you need it.</p>
             </div>
-            <Badge tone={steps.length ? 'success' : 'neutral'}>{steps.length} steps</Badge>
+            <Badge tone={pageEvidence.length ? 'success' : 'neutral'}>{pageEvidence.length} pages</Badge>
+          </div>
+          <div className="journey-report-meta page-evidence-summary">
+            <div>
+              <span>Explored Pages</span>
+              <strong>{pageEvidence.length}</strong>
+            </div>
+            <div>
+              <span>Titles &amp; Headings</span>
+              <strong>{capturedTitleCount}</strong>
+            </div>
+            <div>
+              <span>Cards Captured</span>
+              <strong>{capturedCardCount}</strong>
+            </div>
+            <div>
+              <span>Pages With Evidence</span>
+              <strong>{evidencedPageCount}</strong>
+            </div>
           </div>
 
-          <div className="journey-report-meta">
-            <div>
-              <span>Total Steps</span>
-              <strong>{steps.length}</strong>
-            </div>
-            <div>
-              <span>Total Interactions</span>
-              <strong>{steps.reduce((total, step) => total + (step.interactions?.length ?? 0), 0)}</strong>
-            </div>
-            <div>
-              <span>Events</span>
-              <strong>{detail.events?.length ?? selectedJourney?.events?.length ?? 0}</strong>
-            </div>
-            <div>
-              <span>Depth</span>
-              <strong>{formatValue(detail.total_depth)}</strong>
-            </div>
-          </div>
+          {pageEvidence.length ? (
+            <div className="page-evidence-list">
+              {pageEvidence.map((page, pageIndex) => (
+                <article key={page.url} className="page-evidence-card">
+                  <header className="page-evidence-card-head">
+                    <div className="page-evidence-index">{pageIndex + 1}</div>
+                    <div>
+                      <span className="journey-report-kicker">Explored page</span>
+                      <h3>{page.title}</h3>
+                      <a href={page.url.startsWith('http') ? page.url : undefined} target="_blank" rel="noreferrer">{page.url}</a>
+                    </div>
+                    <div className="page-evidence-badges">
+                      <Badge tone="neutral">{page.headings.length} titles</Badge>
+                      <Badge tone={page.cards.length ? 'success' : 'neutral'}>{page.cards.length} cards</Badge>
+                    </div>
+                  </header>
 
-          <div className="journey-report-section journey-report-table-section">
-            <h3>Extracted Steps</h3>
-            {steps.length ? (
-              <Table columns={['Step', 'Depth', 'Page', 'Interactions']} rows={steps.map((step) => (
-                <tr key={`${step.step_number}-${step.page_url}`}>
-                  <td>{step.step_number}</td>
-                  <td>{step.depth_level}</td>
-                  <td>
-                    <div>{step.page_title}</div>
-                    <small>{step.page_url}</small>
-                  </td>
-                  <td>{step.interactions?.length ?? 0}</td>
-                </tr>
-              ))} />
-            ) : (
-              <p>No extracted steps were captured for this journey.</p>
-            )}
-          </div>
+                  <div className="page-evidence-content-grid">
+                    <section className="page-evidence-content-section">
+                      <h4>Titles &amp; Headings</h4>
+                      {page.headings.length ? (
+                        <ul className="page-evidence-title-list">
+                          {page.headings.map((heading, index) => <li key={`${page.url}-heading-${index}`}>{heading}</li>)}
+                        </ul>
+                      ) : <p className="page-evidence-empty">No page headings were captured.</p>}
+                    </section>
 
-          <div className="journey-report-section journey-report-table-section">
-            <h3>Step Interactions</h3>
-            {steps.some((step) => step.interactions?.length) ? (
-              <div className="journey-interaction-stack">
-                {steps.map((step) => (
-                  <section key={`step-detail-${step.step_number}`} className="journey-report-page">
-                    <h4>Step {step.step_number}: {step.page_title || 'Untitled page'}</h4>
-                    {(step.interactions ?? []).length ? (
+                    <section className="page-evidence-content-section page-evidence-card-content">
+                      <h4>Cards &amp; Content</h4>
+                      {page.cards.length ? (
+                        <div className="page-evidence-captured-cards">
+                          {page.cards.map((card, index) => (
+                            <div className="page-evidence-captured-card" key={`${page.url}-card-${index}`}>
+                              <strong>{card.title}</strong>
+                              {card.description ? <p>{card.description}</p> : null}
+                              {card.imageAlt ? <small>Image: {card.imageAlt}</small> : null}
+                              {card.cta ? <span>{card.cta}</span> : null}
+                              {card.destinationUrl ? <small>Destination: {card.destinationUrl}</small> : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : <p className="page-evidence-empty">No structured cards were identified on this page.</p>}
+                    </section>
+                  </div>
+
+                  {page.descriptions.length ? (
+                    <section className="page-evidence-content-section page-evidence-descriptions">
+                      <h4>Descriptions</h4>
+                      <ul>
+                        {page.descriptions.map((description, index) => <li key={`${page.url}-description-${index}`}>{description}</li>)}
+                      </ul>
+                    </section>
+                  ) : null}
+
+                  {page.ctas.length ? (
+                    <section className="page-evidence-content-section page-evidence-ctas">
+                      <h4>Important Links &amp; CTAs</h4>
+                      <div>{page.ctas.map((cta, index) => <span key={`${page.url}-cta-${index}`}>{cta}</span>)}</div>
+                    </section>
+                  ) : null}
+
+                  <details className="page-evidence-disclosure">
+                    <summary>View page evidence</summary>
+                    <div className="page-evidence-proof-grid">
+                      <div><span>Journey steps</span><strong>{page.stepNumbers.join(', ')}</strong></div>
+                      <div><span>Captured interactions</span><strong>{page.interactions.length}</strong></div>
+                      <div><span>DOM snapshots</span><strong>{page.domSnapshotCount}</strong></div>
+                      <div><span>Screenshots</span><strong>{page.screenshots.length}</strong></div>
+                    </div>
+                    {page.screenshots.length ? (
+                      <div className="page-evidence-files">
+                        <strong>Screenshot evidence</strong>
+                        {page.screenshots.map((path, index) => <code key={`${page.url}-screenshot-${index}`}>{path}</code>)}
+                      </div>
+                    ) : <p className="page-evidence-empty">No screenshot path was attached to this page.</p>}
+                  </details>
+
+                  {page.interactions.length ? (
+                    <details className="page-evidence-disclosure page-evidence-advanced">
+                      <summary>Advanced technical evidence ({page.interactions.length})</summary>
                       <Table
-                        columns={['Sequence', 'Element', 'Action', 'Result', 'Selector']}
-                        rows={(step.interactions ?? []).map((interaction, index) => (
-                          <tr key={`${step.step_number}-${interaction.sequence_id ?? index}`}>
-                            <td>{interaction.sequence_id ?? index + 1}</td>
+                        columns={['Action', 'Element', 'Result', 'Technical Evidence']}
+                        rows={page.interactions.map((interaction, index) => (
+                          <tr key={`${page.url}-interaction-${interaction.sequence_id ?? index}`}>
+                            <td>{interaction.action || 'inspect'}</td>
+                            <td>{interaction.element_label || interaction.element_type || '-'}</td>
+                            <td>{interaction.resulted_in || '-'}</td>
                             <td>
-                              <div>{interaction.element_type}</div>
-                              <small>{interaction.element_label}</small>
-                            </td>
-                            <td>{interaction.action}</td>
-                            <td>
-                              <div>{interaction.resulted_in}</div>
-                              {interaction.validation_message ? <small>{interaction.validation_message}</small> : null}
-                            </td>
-                            <td>
-                              <div>{interaction.selector}</div>
-                              <small>{interaction.selector_type}</small>
+                              <details className="interaction-evidence">
+                                <summary>Technical details</summary>
+                                <div className="interaction-evidence-grid">
+                                  <span>Selector</span><strong>{formatValue(interaction.selector)}</strong>
+                                  <span>Destination</span><strong>{formatValue(interaction.destination_url)}</strong>
+                                  <span>Role</span><strong>{formatValue(interaction.role)}</strong>
+                                  <span>Timestamp</span><strong>{formatValue(interaction.event_timestamp)}</strong>
+                                  <span>Coordinates</span><strong>{formatValue(interaction.coordinates)}</strong>
+                                  <span>Network events</span><strong>{interaction.network_events?.length ?? 0}</strong>
+                                  <span>Replay selector</span><strong>{formatValue(interaction.replay?.selector)}</strong>
+                                </div>
+                              </details>
                             </td>
                           </tr>
                         ))}
                       />
-                    ) : (
-                      <p>No interactions were captured for this step.</p>
-                    )}
-                  </section>
-                ))}
-              </div>
-            ) : (
-              <p>No detailed step interactions were captured for this journey.</p>
-            )}
-          </div>
+                    </details>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="page-evidence-empty-state">
+              <strong>No page evidence was captured for this journey.</strong>
+              <span>Run exploration again to collect page titles, cards, descriptions, and screenshots.</span>
+            </div>
+          )}
         </section>
       )
     }
-
     return null
   }
 
   return (
     <Card
       title="Created Journeys"
-      subtitle="Select a created journey map to inspect details, visualization, payload, UI elements, steps, and interactions."
-      actions={<><button onClick={load} disabled={loading}>{loading ? 'Refreshing...' : 'Refresh'}</button><button className="secondary-button" onClick={deleteJourneys} disabled={loading}>Delete Journey Discovery</button></>}
+      subtitle="Select a created journey map to inspect details, visualization, live replay, and page-focused evidence."
+      actions={(
+        <>
+          <button onClick={load} disabled={loading}>{loading ? 'Refreshing...' : 'Refresh'}</button>
+          <button className="secondary-button" onClick={deleteJourneys} disabled={loading || !data.length}>Delete all journey discoveries</button>
+        </>
+      )}
     >
-      <Table columns={['Select', 'Journey ID', 'Application URL', 'Source URL', 'Steps', 'Events', 'Action']} rows={rows} />
+      <div className="journey-selection-toolbar">
+        <label className="journey-select-all">
+          <input
+            type="checkbox"
+            ref={(input) => { if (input) input.indeterminate = selectedForDelete.length > 0 && selectedForDelete.length < data.length }}
+            checked={Boolean(data.length) && selectedForDelete.length === data.length}
+            onChange={toggleAllJourneysForDelete}
+            disabled={loading || !data.length}
+          />
+          <span>{selectedForDelete.length ? `${selectedForDelete.length} selected` : 'Select journeys to delete'}</span>
+        </label>
+        <button
+          type="button"
+          className="secondary-button delete-selected-button"
+          onClick={deleteSelectedJourneys}
+          disabled={loading || !selectedForDelete.length}
+        >
+          Delete selected
+        </button>
+      </div>
+      <Table columns={['Select for deletion', 'Journey ID', 'Source URL', 'Steps', 'Events', 'Action']} rows={rows} />
       <div className="inline-actions">
         {message && <div className="notification-row"><Badge tone={message.includes('deleted') ? 'danger' : 'warning'}>{message}</Badge></div>}
       </div>
@@ -486,3 +1076,11 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
     </Card>
   )
 }
+
+
+
+
+
+
+
+

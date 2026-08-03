@@ -86,46 +86,46 @@ export function Shell() {
         </header>
         <main className="content">
           {showWorkflowNav && (
-            <>
-              <div className="pipeline-stepper">
-                {pipelineSteps.map((step, index) => {
-                  const state = getStepState(location.pathname, index)
-                  return (
-                    <button
-                      key={step.path}
-                      type="button"
-                      className={`pipeline-stepper-item ${state}`}
-                      onClick={() => {
-                        if (state !== 'locked') navigate(step.path)
-                      }}
-                      disabled={state === 'locked'}
-                    >
-                      <span className="pipeline-stepper-index">{index + 1}</span>
-                      <div>
-                        <strong>{step.label}</strong>
-                        <small>{state === 'current' ? 'Current step' : state === 'completed' ? 'Completed' : 'Locked'}</small>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="workflow-nav">
-                <div className="workflow-nav-copy">
-                  <strong>{currentIndex >= 0 ? pipelineSteps[currentIndex]?.label : 'Pipeline'}</strong>
-                  <span>{currentIndex >= 0 ? `Step ${currentIndex + 1} of ${pipelineSteps.length}` : 'Step navigation'}</span>
-                </div>
-                <div className="workflow-nav-actions">
-                  <button type="button" className="secondary-button workflow-nav-button" onClick={() => previousStep && navigate(previousStep.path)} disabled={!previousStep}>
-                    Previous
+            <div className="pipeline-stepper">
+              {pipelineSteps.map((step, index) => {
+                const state = getStepState(location.pathname, index)
+                return (
+                  <button
+                    key={step.path}
+                    type="button"
+                    className={`pipeline-stepper-item ${state}`}
+                    onClick={() => {
+                      if (state !== 'locked') navigate(step.path)
+                    }}
+                    disabled={state === 'locked'}
+                  >
+                    <span className="pipeline-stepper-index">{index + 1}</span>
+                    <div>
+                      <strong>{step.label}</strong>
+                      <small>{state === 'current' ? 'Current step' : state === 'completed' ? 'Completed' : 'Locked'}</small>
+                    </div>
                   </button>
-                  <button type="button" className="workflow-nav-button" onClick={() => nextStep && navigate(nextStep.path)} disabled={!nextStep}>
-                    Next
-                  </button>
-                </div>
-              </div>
-            </>
+                )
+              })}
+            </div>
           )}
           <Outlet />
+          {showWorkflowNav && (
+            <div className="workflow-nav workflow-nav-bottom">
+              <div className="workflow-nav-copy">
+                <strong>{currentIndex >= 0 ? pipelineSteps[currentIndex]?.label : 'Pipeline'}</strong>
+                <span>{currentIndex >= 0 ? `Step ${currentIndex + 1} of ${pipelineSteps.length}` : 'Step navigation'}</span>
+              </div>
+              <div className="workflow-nav-actions">
+                <button type="button" className="secondary-button workflow-nav-button" onClick={() => previousStep && navigate(previousStep.path)} disabled={!previousStep}>
+                  Previous
+                </button>
+                <button type="button" className="workflow-nav-button" onClick={() => nextStep && navigate(nextStep.path)} disabled={!nextStep}>
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>
