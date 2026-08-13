@@ -21,8 +21,14 @@ Explore the application from the base URL and discover the real user journey str
 Requirements:
 - Bind action verbs literally: "hover" means pointer hover only. Never click a hover target unless the objective separately and explicitly says to click that same target.
 - After hovering, wait for the menu state to settle and rescan for the requested child. If the child is absent, record the hover/menu failure; never click the parent as a fallback.
+- Before activating any objective target, inspect the DOM and accessibility tree. Determine whether the target is a visible link, button, menu item, tab, form control, or a hover-triggered parent. Record the matched text, accessible name, role, tag, href, selector, section or menu context, visibility, and enabled state.
 - Start from the base URL and stay within the same origin unless the journey clearly requires an external authenticated redirect.
 - Capture page title, URL, headings, primary CTAs, buttons, links, forms, tabs, menus, inputs, validation states, and any meaningful interactive controls.
+- When the objective names a target under a parent menu or section, inspect the parent and its rendered descendants from the DOM. Decide from the live element semantics whether the parent requires hover, click, expansion, or no action; never infer the interaction type from wording alone.
+- After the requested child destination opens, treat navigation as complete but exploration as still in progress. Scroll the destination from top to bottom, wait for lazy-loaded content after each viewport, and capture its headings, links, buttons, CTAs, tabs, forms, inputs, cards, and meaningful controls. Do not broaden into unrelated linked pages unless the objective requests that traversal.
+- When the objective requests all links, all options, or a complete section, enumerate the visible same-origin descendants, visit each valid destination once, scroll each destination through its full loaded page, and capture lazy-loaded content after scrolling.
+- Treat an objective containing "under", "within", "inside", or "beneath" as a strict hierarchy. The base page is only the launch surface: do not scroll or click unrelated base-page controls before resolving the named parent and section. If the named parent, section, or child target is absent in the DOM after one bounded wait and rescan, stop with an objective-blocked result.
+- Never click the named parent merely because it is a link. If it is only a hover or expandable parent, perform that state change and inspect its rendered descendants. Click only the requested actionable descendants.
 - Prefer concrete interactions over generic placeholders.
 - Record each discovered step with page name, action, event type, URL, depth, and a short description grounded in the actual page content.
 - Build a structured event log with timestamps and metadata describing what was seen or discovered.
@@ -30,6 +36,7 @@ Requirements:
 - Stop only when every explicit objective target has a recorded disposition or when crawl limits, authentication, authorization, or safety boundaries prevent further progress.
 - Do not reuse a template journey unless the application genuinely has the same structure.
 - Use a website profile only for objective-relevant navigation mechanics; ignore profile content that would broaden or replace the journey objective.
+- Apply these discovery and evidence rules consistently to every application and every journey objective.
 
 Discovery flow:
 1. Launch the application and confirm the page is stable.
@@ -54,16 +61,80 @@ def build_browser_agent_prompt(application_name: str, application_url: str, obje
     )
 
 
-def build_disney_world_prompt(application_url: str) -> str:
-    return f"""Domain navigation hints for Disney World pages at {application_url}.
+DISNEY_WORLD_EXPLORATION_PROMPT = """You are a Disney World exploratory navigation agent.
+
+The journey objective below is the complete and authoritative scope for this run.
+Explore only the requested Disney World section and stop when its requested
+destination or targets have been verified.
+
+Execution rules:
+- Start at the supplied application URL and wait for the page to become stable.
+- Determine login state only when the objective explicitly requires authentication.
+- Do not log in, enter credentials, or explore account flows for a public read-only objective.
+- Treat navigation labels literally. Do not substitute Tickets, Admission, Parks,
+  Offers, Reservations, Checkout, or another familiar Disney flow for the requested target.
+- Interpret phrases such as "under Places to Stay" as a submenu instruction: hover
+  over the Places to Stay parent first, inspect all visible child links, and only then
+  select the requested child such as Disney Resorts Collection.
+- For an objective such as "3-Step Planning Guide under Tickets & Parks", inspect
+  the rendered Tickets & Parks menu first. Treat the parent as hoverable when its
+  child is not yet visible, then match the exact child label "3-Step Planning Guide"
+  by visible text, accessible name, href, and menu context before clicking it.
+- When the objective says explore all links, click each visible child link one by one.
+  After each click, wait for the destination page to load, capture its evidence, return
+  to the Disney World starting page, reopen Places to Stay, and continue with the next
+  unvisited child. Hovering alone is not completion.
+- If the objective says to explore under Places to Stay or under the Disney Resorts
+  Collection, treat "Places to Stay" as the hover-only parent and "Disney Resorts
+  Collection" as a named section. Inspect the rendered submenu and determine from
+  the DOM whether Disney Resorts Collection itself is an actionable link. If it has
+  a real href or actionable role, click it and capture its full destination page;
+  otherwise treat it as an informational heading. Then enumerate every visible
+  same-origin child link beneath that section, even when the objective does not
+  list the child names. Click each valid child link exactly once, in visible order,
+  including View All Disney Accommodations,
+  Deluxe Villas, Deluxe Resort Hotels, Moderate Resort Hotels, Value Resort Hotels,
+  and Campgrounds when those links are present.
+- For this objective, load the base URL without scrolling the homepage, hover Places
+  to Stay, verify the Disney Resorts Collection section in the rendered DOM, and
+  explore only its child links. Never click Places to Stay and never enter Tickets,
+  Admission, Offers, Parks, or Featured Items.
+- For every destination page, scroll from the top to the bottom, wait for lazy-loaded
+  content, and capture the visible headings, cards, links, controls, screenshots,
+  and page state before returning to the submenu for the next link.
+- For hover navigation, hover the requested parent, wait for the menu to render,
+  then rescan the visible menu before selecting a child.
+- Click a target only when its visible text, accessible name, href, or destination
+  matches the objective. Never click a merely similar link.
+- After every navigation, verify the URL, page title, primary visible heading, and
+  relevant page content before recording success. Use the primary visible heading
+  as the human-readable page name; use the document title and URL only as fallbacks.
+- Record every attempted target as completed, blocked, not found, or safety-skipped.
+- Capture the interaction label, element type, selector or accessible role, action,
+  page URL, destination URL, wait condition, visible result, and failure reason.
+- Do not submit forms, purchase products, change reservations, or modify data unless
+  the objective explicitly authorizes that action.
+- Stop after all explicit objective targets have a recorded disposition. Do not
+  continue into unrelated branches or attempt to discover every Disney journey.
+
+Completion response:
+Return a concise structured summary containing objective_status, matched_targets,
+missing_targets, pages_visited, actions_performed, clicked element labels/selectors,
+source and destination URLs, blocked reasons, and evidence gaps.
+"""
+
+
+def build_disney_world_prompt(application_url: str, objective: str = "") -> str:
+    return f"""{DISNEY_WORLD_EXPLORATION_PROMPT}
+
+Application URL: {application_url}
 
 {OBJECTIVE_AUTHORITY_POLICY}
 
-- Disney navigation commonly uses hover-activated menus and dynamically rendered child links. Hover the objective-relevant parent, wait, and rescan before selecting a child.
-- Match the requested element by visible text, accessible name, href, and destination semantics.
-- Do not assume the objective is ticket purchase, admission, checkout, guest management, or any other familiar Disney flow.
-- Do not enter guest data, select products, add items to a cart, authenticate, or proceed toward purchase unless the journey objective explicitly requires that action and it is within the safety boundary.
-- If a same-page menu update occurs, verify the requested child target is visible before clicking."""
+- If a same-page menu update occurs, verify the requested child target is visible before clicking.
+
+Authoritative journey objective:
+{objective or 'Discover only the specifically requested Disney World journey.'}"""
 
 def build_family_and_friends_prompt(application_url: str) -> str:
     return f"""Domain navigation hints for Family and Friends pages at {application_url}.
@@ -87,7 +158,7 @@ def get_browser_agent_profile(application_url: str, objective: str = "") -> str:
     lower = application_url.lower()
     for needle, builder in BROWSER_JOURNEY_PROFILES:
         if needle in lower:
-            profile = builder(application_url)
+            profile = builder(application_url, objective) if builder is build_disney_world_prompt else builder(application_url)
             break
     else:
         profile = build_browser_agent_prompt("Application", application_url, objective or "Discover the primary user journey", "Home")
@@ -118,6 +189,14 @@ Input:
 - You will receive the complete output from a user journey discovery agent.
 - The input may contain feature discovery sections, structured user journeys, multiple journeys, start and end states, sequential steps, conditional branches, and blocked journeys with reasons.
 - Ignore feature discovery sections.
+- Build page nodes only from each structured step page_title and page_url.
+- Build action nodes only from structured interaction action and element_label fields.
+- Never infer page names from raw DOM headings, navigation menus, screenshots, or page chrome.
+- Use the reference topology: Start to one parent feature, then parallel child journey branches, then chronological actions within each branch, then a terminal status node.
+- When multiple captured child links or destination pages share the same parent, connect each child directly to that parent. Do not flatten sibling journeys into one long sequence.
+- Use Completed only for captured successful branches. Use Exploration Blocked when the captured outcome is blocked. Use Human Input Required only when the evidence explicitly reports authentication, authorization, confirmation, invitation acceptance, or another required human action.
+- Include every meaningful captured hover, click, fill, select, navigation, validation, and error action. Ignore page scans, inventory counters, screenshots, raw selectors, IDs, and repeated technical inspection events.
+- Never invent a branch, action, completion, error, or human-input requirement that is absent from the structured journey data.
 
 Output requirements:
 - Return a single Mermaid diagram.

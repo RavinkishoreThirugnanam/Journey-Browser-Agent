@@ -18,6 +18,8 @@ class ExplorationResponse(BaseModel):
     message: str
     journey_id: str
     journey_count: int
+    outcome: str = ''
+    outcome_detail: str = ''
     exploration_metadata: dict[str, object] = Field(default_factory=dict)
 
 

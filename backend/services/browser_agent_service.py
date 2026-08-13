@@ -59,6 +59,95 @@ class ClickCandidate:
     selector: str = ''
     value: str = ''
     input_type: str = ''
+    section_heading: str = ''
+    parent_selector: str = ''
+    parent_label: str = ''
+    parent_tag: str = ''
+    parent_role: str = ''
+    parent_interaction: str = ''
+
+
+@dataclass(frozen=True)
+class JourneyPlanStep:
+    index: int
+    action: str
+    target: str
+    parent: str = ''
+    evidence: str = 'interaction'
+
+
+def _compile_journey_execution_plan(objective: str) -> list[JourneyPlanStep]:
+    """Compile any objective hierarchy into an interaction-adaptive contract."""
+    targets = _objective_targets(objective)
+    if not targets:
+        return []
+    if len(targets) == 1:
+        if _objective_requests_submenu_inventory(objective):
+            return [
+                JourneyPlanStep(0, 'resolve_collection_parent', targets[0], evidence='relationship_state'),
+                JourneyPlanStep(1, 'discover_ordered_children', '*', parent=targets[0], evidence='child_allowlist'),
+                JourneyPlanStep(2, 'for_each_child_click_and_capture', '*', parent=targets[0], evidence='full_page_each'),
+                JourneyPlanStep(3, 'complete_collection', '*', parent=targets[0], evidence='coverage_check'),
+            ]
+        return [JourneyPlanStep(0, 'resolve_target', targets[0])]
+    plan = [JourneyPlanStep(0, 'resolve_parent', targets[0], evidence='relationship_state')]
+    for index, target in enumerate(targets[1:], start=1):
+        final = index == len(targets) - 1
+        plan.append(JourneyPlanStep(
+            index,
+            'resolve_and_explore' if final else 'resolve_and_continue',
+            target,
+            parent=targets[index - 1],
+            evidence='full_page_headings_links_ctas_and_controls' if final else 'destination_page',
+        ))
+    return plan
+
+
+def _execution_plan_targets(plan: list[JourneyPlanStep]) -> list[str]:
+    """Return the concrete ordered targets that the executor must follow."""
+    return [step.target for step in plan if step.target and step.target != '*']
+
+
+def _collection_resume_tasks(
+    destination_url: str,
+    application_url: str,
+    depth: int,
+    next_target_index: int,
+    target_count: int,
+) -> list[tuple[str, int, int]]:
+    """Visit child evidence first, then resume the collection at its next child."""
+    tasks = [(destination_url, depth + 1, target_count)]
+    if next_target_index < target_count:
+        tasks.append((application_url, depth, next_target_index))
+    return tasks
+
+
+def _can_execute_objective_at_depth(objective: str, depth: int, max_depth: int) -> bool:
+    """Explicit scoped plans are bounded by their targets, not generic depth."""
+    return _objective_is_parent_child_scope(objective) or _objective_requests_submenu_inventory(objective) or depth < max_depth
+
+
+def _authentication_gate_detected(steps: list[JourneyStep], application_url: str) -> bool:
+    """Recognize an account destination that redirected or rendered a login boundary."""
+    base = application_url.rstrip('/')
+    for step in steps:
+        if step.page_url.rstrip('/') == base:
+            continue
+        for interaction in step.interactions:
+            searchable = _normalize_match_text(' '.join(filter(None, (
+                interaction.element_label,
+                interaction.selector,
+                interaction.destination_url or '',
+                interaction.resulted_in,
+            ))))
+            if any(phrase in searchable for phrase in (
+                'log in or create account',
+                'login appredirect',
+                'sign in to continue',
+                'authentication required',
+            )):
+                return True
+    return False
 
 
 def _effective_cdp_url(configured_url: object = '') -> str:
@@ -178,17 +267,19 @@ Authoritative scope:
 Execution contract:
 1. The journey objective is the source of truth. Domain guidance is optional and must never redirect the run to a familiar but unrelated workflow.
 2. Navigate to the exact start URL and wait for visible rendering. Inspect the DOM and accessibility state before every action.
-3. Match controls using visible text, accessible name, role, id, selector, href, and destination semantics. Do not select a merely similar control when an explicit target is missing.
-4. For hidden navigation, hover the objective-relevant parent, wait for rendering, rescan, and click only the matching child target.
-5. Stay in objective order. Record every attempted target as succeeded, blocked, safety-skipped, or not found, with supporting URL and element evidence.
-6. Do not create, delete, purchase, submit irreversible forms, log out, or modify production data unless the objective explicitly requires the action and the configured safety boundary permits it.
-7. Stop only when every explicit target has a disposition, authentication or authorization blocks progress, or the crawl limits are reached.
+3. Before acting on a target, classify the matched element from the live DOM and accessibility state: tag, role, visible text, accessible name, href, selector, enabled state, parent menu, nearest section heading, and whether it is a link, button, menu item, tab, form control, or hover-triggered parent. Record this evidence.
+4. Match controls using visible text, accessible name, role, id, selector, href, and destination semantics. Do not select a merely similar control when an explicit target is missing.
+5. For hidden navigation, hover the objective-relevant parent, wait for rendering, rescan, and click only the matching child target. A parent hover is an inspection step, not completion.
+6. When the objective uses "under" for a navigation parent or section, the parent hover only reveals the submenu; it is never completion. Treat section headings as labels, not links. Enumerate the visible same-origin child links under the requested section, then click each child exactly once in visible order. Wait for each destination, capture the URL, title, primary heading, and evidence, return to the start page, reopen the parent menu, and continue with the next unvisited child.
+7. Stay in objective order. Record every attempted target as succeeded, blocked, safety-skipped, or not found, with supporting URL and element evidence.
+8. Do not create, delete, purchase, submit irreversible forms, log out, or modify production data unless the objective explicitly requires the action and the configured safety boundary permits it.
+9. Stop only when every explicit target has a disposition, authentication or authorization blocks progress, or the crawl limits are reached.
 
 Completion response:
 Return a concise structured summary containing objective_status, matched_targets, missing_targets, pages_visited, actions_performed, clicked element labels/selectors, source and destination URLs, blocked reasons, and evidence gaps. Never report success for a different destination or workflow.
 """.strip()
 
-def _browser_use_to_journey(exploration_text: str, application_url: str, runtime: dict[str, object], parameters: dict[str, str], max_depth: int, max_pages: int, follow_links: bool, objective: str) -> ExplorationResult:
+def _browser_use_to_journey(exploration_text: str, application_url: str, runtime: dict[str, object], parameters: dict[str, str], max_depth: int, max_pages: int, follow_links: bool, objective: str, stream_key: str = '') -> ExplorationResult:
     browser_llm, supervisor_llm = _build_browser_use_client(runtime)
     headers = _build_browser_headers(runtime, application_url)
     profile_prompt = get_browser_agent_profile(application_url, objective)
@@ -228,8 +319,11 @@ def _browser_use_to_journey(exploration_text: str, application_url: str, runtime
             supervisor_text = f'Supervisor unavailable: {type(exc).__name__}: {exc}'
 
     # Browser-use drives the session; Playwright captures authoritative DOM, screenshots, network, hover, and replay evidence for the UI.
-    steps, crawl_reasoning, _ = _crawl_with_playwright(application_url, parameters, max_depth=max_depth, max_pages=max_pages, follow_links=follow_links, objective=objective, min_events=int(runtime.get('min_events', 10) or 10))
-    return _build_browser_use_result(final_text + ('\n\nSupervisor review:\n' + supervisor_text if supervisor_text else ''), application_url, runtime, steps, crawl_reasoning, objective)
+    steps, crawl_reasoning, capture_business = _crawl_with_playwright(application_url, parameters, max_depth=max_depth, max_pages=max_pages, follow_links=follow_links, objective=objective, min_events=int(runtime.get('min_events', 10) or 10), stream_key=stream_key)
+    result = _build_browser_use_result(final_text + ('\n\nSupervisor review:\n' + supervisor_text if supervisor_text else ''), application_url, runtime, steps, crawl_reasoning, objective)
+    if result.journeys:
+        result.journeys[0].test_hints.update(capture_business)
+    return result
 
 class _SimplePageParser(HTMLParser):
     def __init__(self) -> None:
@@ -323,8 +417,25 @@ def _extract_title(page_url: str, title: str | None) -> str:
 def _extract_page_signals(page) -> dict[str, object]:
     return page.evaluate(
         """() => {
-          const clean = (value) => (value || '').replace(/\\s+/g, ' ').trim();
-          const headings = Array.from(document.querySelectorAll('h1, h2, h3')).slice(0, 100).map((el) => clean(el.textContent));
+          const clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim();
+          const visible = (el) => {
+            if (!el || el.hidden || el.getAttribute('aria-hidden') === 'true') return false;
+            const style = window.getComputedStyle(el);
+            const rect = el.getBoundingClientRect();
+            return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) !== 0 && rect.width > 0 && rect.height > 0;
+          };
+          const isNavigationChrome = (el) => Boolean(
+            el.matches('[role="menuitem"]') ||
+            el.closest('header, nav, footer, [role="navigation"], [role="menu"], [role="menubar"]')
+          );
+          const headingElements = Array.from(document.querySelectorAll('h1, h2, h3, [role="heading"]'))
+            .filter((el) => visible(el) && !isNavigationChrome(el) && clean(el.textContent));
+          const headings = headingElements.slice(0, 100).map((el) => clean(el.textContent));
+          const primaryHeadingElement =
+            headingElements.find((el) => el.matches('main h1, [role="main"] h1, article h1')) ||
+            headingElements.find((el) => el.matches('h1')) ||
+            headingElements[0];
+          const primaryHeading = clean(primaryHeadingElement?.textContent);
           const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"]')).slice(0, 200).map((el) => clean(el.innerText || el.textContent || el.value || el.getAttribute('aria-label')));
           const links = Array.from(document.querySelectorAll('a[href]')).slice(0, 500).map((el) => clean(el.innerText || el.textContent));
           const inputs = Array.from(document.querySelectorAll('input, select, textarea')).slice(0, 100).map((el) => clean(el.getAttribute('name') || el.getAttribute('placeholder') || el.getAttribute('aria-label') || el.id || el.type || 'control'));
@@ -336,7 +447,7 @@ def _extract_page_signals(page) -> dict[str, object]:
             labels: Array.from(form.querySelectorAll('label')).slice(0, 8).map((label) => clean(label.textContent)),
           }));
           const primaryCta = buttons.find((text) => /start|continue|submit|sign in|log in|next|create|save|search|buy|checkout|explore/i.test(text)) || buttons[0] || '';
-          return { headings, buttons, links, inputs, menus, sections, forms, primaryCta, title: document.title || '' };
+          return { headings, primaryHeading, buttons, links, inputs, menus, sections, forms, primaryCta, title: document.title || '' };
         }
         """
     )
@@ -345,7 +456,8 @@ def _extract_page_signals(page) -> dict[str, object]:
 def _extract_clickable_actions(page) -> list[ClickCandidate]:
     raw = page.evaluate(
         """() => {
-          const clean = (value) => (value || '').replace(/\\s+/g, ' ').trim();
+          // DOM attributes are not guaranteed to be strings.
+          const clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim();
           const cssString = (value) => {
             try { return CSS.escape(value || ''); } catch (_) { return String(value || '').replace(/"/g, '\\"'); }
           };
@@ -357,10 +469,10 @@ def _extract_clickable_actions(page) -> list[ClickCandidate]:
             const name = clean(el.getAttribute('name') || '');
             const href = clean(el.getAttribute('href') || '');
             if (id) return `#${cssString(id)}`;
-            if (dataTest) return `[data-testid="${dataTest}"]`;
-            if (aria) return `${tag || '*'}[aria-label="${aria}"]`;
-            if (name) return `${tag || '*'}[name="${name}"]`;
-            if (tag === 'a' && href) return `a[href="${href}"]`;
+            if (dataTest) return `[data-testid="${cssString(dataTest)}"]`;
+            if (aria) return `${tag || '*'}[aria-label="${cssString(aria)}"]`;
+            if (name) return `${tag || '*'}[name="${cssString(name)}"]`;
+            if (tag === 'a' && href) return `a[href="${cssString(href)}"]`;
             return tag || '*';
           };
           const isVisible = (el) => {
@@ -368,7 +480,82 @@ def _extract_clickable_actions(page) -> list[ClickCandidate]:
             const style = window.getComputedStyle(el);
             return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || '1') > 0.05;
           };
-          const elements = Array.from(document.querySelectorAll('a[href], button, [role="button"], [role="menuitem"], [role="tab"], input:not([type="password"]):not([type="file"]), select, textarea, summary'));
+          const elements = Array.from(document.querySelectorAll('a[href], area[href], button, [role="button"], [role="link"], [role="menuitem"], [role="tab"], [aria-haspopup], [data-menu-trigger], [data-href], [data-url], [onclick], input:not([type="password"]):not([type="file"]), select, textarea, summary, h1, h2, h3, h4, h5, h6, [role="heading"]'));
+          const selectorForElement = (el) => {
+            if (!el) return '';
+            const id = clean(el.id || '');
+            const dataTest = clean(el.getAttribute('data-testid') || el.getAttribute('data-test') || '');
+            if (id) return '#' + cssString(id);
+            if (dataTest) return '[data-testid="' + cssString(dataTest) + '"]';
+            const tag = (el.tagName || '').toLowerCase();
+            const aria = clean(el.getAttribute('aria-label') || '');
+            if (aria) return tag + '[aria-label="' + cssString(aria) + '"]';
+            const name = clean(el.getAttribute('name') || '');
+            if (name) return tag + '[name="' + cssString(name) + '"]';
+            const href = clean(el.getAttribute('href') || '');
+            if (href) return tag + '[href="' + cssString(href) + '"]';
+            const dataHref = clean(el.getAttribute('data-href') || el.getAttribute('data-url') || '');
+            if (dataHref) return tag + '[data-href="' + cssString(dataHref) + '"]';
+            return tag || '*';
+          };
+          const isHeading = (el) => /^h[1-6]$/i.test(el?.tagName || '') || el?.getAttribute('role') === 'heading';
+          const isContainer = (el) => el && (
+            ['NAV', 'MENU', 'SECTION', 'ARTICLE', 'ASIDE', 'LI', 'FORM'].includes(el.tagName) ||
+            el.getAttribute('role') === 'menu' ||
+            el.getAttribute('role') === 'region' ||
+            el.hasAttribute('aria-labelledby')
+          );
+          const nearestRelationship = (el) => {
+            let node = el.parentElement;
+            let container = null;
+            let heading = isHeading(el) ? el : null;
+            // Find the closest ancestor containing a heading that precedes the
+            // element. Do not stop at a generic wrapper or assign all menu
+            // items to the first heading in the entire navigation panel.
+            while (node && node !== document.body) {
+              const headings = Array.from(node.querySelectorAll('h1,h2,h3,h4,h5,h6,[role="heading"]'));
+              const preceding = headings.filter((candidate) => {
+                const position = candidate.compareDocumentPosition(el);
+                return Boolean(position & Node.DOCUMENT_POSITION_FOLLOWING);
+              });
+              if (preceding.length) {
+                heading = preceding[preceding.length - 1];
+                container = node;
+                break;
+              }
+              if (!container && isContainer(node)) container = node;
+              node = node.parentElement;
+            }
+            if (!container && heading) container = heading.parentElement;
+            const headingText = clean(heading?.innerText || heading?.textContent || '');
+            if (isHeading(el)) {
+              return {
+                parent_selector: selectorForElement(el),
+                parent_label: headingText,
+                parent_tag: (el.tagName || '').toLowerCase(),
+                parent_role: clean(el.getAttribute('role') || 'heading'),
+                parent_interaction: 'informational_heading',
+                section_heading: headingText,
+              };
+            }
+            const parentLabel = clean(
+              container?.getAttribute('aria-label') ||
+              (container?.getAttribute('aria-labelledby') && document.getElementById(container.getAttribute('aria-labelledby'))?.innerText) ||
+              headingText
+            );
+            const parentRole = clean(container?.getAttribute('role') || '');
+            const parentTag = (container?.tagName || '').toLowerCase();
+            const parentHref = clean(container?.getAttribute('href') || '');
+            const parentHasPopup = container?.getAttribute('aria-haspopup') || container?.hasAttribute('data-menu-trigger');
+            return {
+              parent_selector: selectorForElement(container || heading),
+              parent_label: parentLabel,
+              parent_tag: parentTag || (heading ? (heading.tagName || '').toLowerCase() : ''),
+              parent_role: parentRole || (heading ? 'heading' : ''),
+              parent_interaction: parentHref || parentRole === 'menuitem' || parentRole === 'button' || parentHasPopup ? 'click_or_expand' : container ? 'container' : heading ? 'informational_heading' : '',
+              section_heading: headingText,
+            };
+          };
           return elements.map((el, index) => {
             const rect = el.getBoundingClientRect();
             const disabled = Boolean(el.disabled || el.getAttribute('aria-disabled') === 'true');
@@ -376,18 +563,19 @@ def _extract_clickable_actions(page) -> list[ClickCandidate]:
             return {
               index,
               text,
-              href: clean(el.href || el.getAttribute('href') || ''),
+              href: clean(el.href || el.getAttribute('href') || el.getAttribute('data-href') || el.getAttribute('data-url') || ''),
               tag: (el.tagName || '').toLowerCase(),
               role: clean(el.getAttribute('role') || ''),
               element_id: clean(el.id || ''),
               selector: selectorFor(el),
               value: clean(el.value || el.getAttribute('aria-label') || ''),
               input_type: clean(el.getAttribute('type') || ''),
+              ...nearestRelationship(el),
               visible: isVisible(el),
               disabled,
               area: Math.round(rect.width * rect.height),
             };
-          }).filter((item) => item.visible && !item.disabled && (item.text || item.href)).slice(0, 500);
+          }).filter((item) => item.visible && !item.disabled && (item.text || item.href)).slice(0, 700);
         }
         """
     )
@@ -414,8 +602,98 @@ def _normalize_match_text(value: object) -> str:
     return re.sub(r'\s+', ' ', text).strip()
 
 
+def _clean_objective_label(value: object) -> str:
+    label = _normalize_match_text(value)
+    label = re.sub(r'^(?:the\s+)?', '', label)
+    return re.sub(r'\s+(?:link|page|control)$', '', label).strip()
+
+
+def _objective_hierarchy_path(objective: str) -> list[str]:
+    """Build a root-to-leaf path from chained ``child under parent`` facts."""
+    relations: list[tuple[str, str]] = []
+    for sentence in re.split(r'[.;\n]+', str(objective or '')):
+        sentence = re.sub(r'\s+', ' ', sentence).strip()
+        if not sentence or ' under ' not in sentence.lower():
+            continue
+        present_match = re.match(
+            r'(?P<child>.+?)\s+(?:is|are)\s+present\s+under\s+(?:the\s+)?(?P<parent>.+)$',
+            sentence,
+            re.I,
+        )
+        explore_match = re.match(
+            r'(?:explore|open|find|navigate\s+to|select|click)\s+(?:all\s+possible\s+)?(?:user\s+journeys?\s+for\s+)?(?P<child>.+?)\s+under\s+(?:the\s+)?(?P<parent>.+)$',
+            sentence,
+            re.I,
+        )
+        match = present_match or explore_match
+        if not match:
+            continue
+        child = _clean_objective_label(match.group('child'))
+        parent = _clean_objective_label(match.group('parent'))
+        if child and parent:
+            relations.append((parent, child))
+    # Single parent-child objectives already use the established parser. This
+    # routine is specifically for chained hierarchy facts such as
+    # grandparent -> parent -> child.
+    if len(relations) < 2:
+        return []
+
+    parent_to_child = {parent: child for parent, child in relations}
+    children = {child for _, child in relations}
+    roots = [parent for parent, _ in relations if parent not in children]
+    if not roots:
+        return []
+    path = [roots[-1]]
+    seen = set(path)
+    while path[-1] in parent_to_child:
+        child = parent_to_child[path[-1]]
+        if child in seen:
+            return []
+        path.append(child)
+        seen.add(child)
+    return path if len(path) == len(relations) + 1 else []
+
+
+def _target_match_words(target: str) -> list[str]:
+    """Return meaningful target words, ignoring descriptive objective nouns."""
+    ignored = {'feature', 'option', 'journey', 'journeys'}
+    return [word for word in _normalize_match_text(target).split() if word not in ignored]
+
+
+def _target_matches_text(target: str, candidate_text: str) -> bool:
+    """Match visible labels despite branding whitespace and helper suffixes."""
+    normalized_target = _normalize_match_text(target)
+    normalized_candidate = _normalize_match_text(candidate_text)
+    if not normalized_target or not normalized_candidate:
+        return False
+    if normalized_target in normalized_candidate:
+        return True
+    compact_target = normalized_target.replace(' ', '')
+    compact_candidate = normalized_candidate.replace(' ', '')
+    if compact_target and compact_target in compact_candidate:
+        return True
+    words = _target_match_words(target)
+    return bool(words and all(word in normalized_candidate for word in words))
+
+
 def _requires_full_page_inventory(objective: str) -> bool:
     normalized = _normalize_match_text(objective)
+    if _objective_requests_submenu_inventory(objective):
+        return True
+    # A scoped exploratory objective does not end when its requested child is
+    # opened. The base page remains navigation-only, while the final child
+    # destination receives the complete viewport-by-viewport evidence scan.
+    if (
+        _objective_is_parent_child_scope(objective)
+        and re.match(r'^explore\b', normalized)
+        and not any(phrase in normalized for phrase in (
+            'stop after confirming the destination',
+            'stop after opening the destination',
+            'do not scroll',
+            'without scrolling',
+        ))
+    ):
+        return True
     return any(phrase in normalized for phrase in (
         'discover the primary user journey from the application home page',
         'explore the home page',
@@ -432,8 +710,37 @@ def _requires_full_page_inventory(objective: str) -> bool:
         'all links',
         'all inventories',
         'complete inventory',
+        'all possible user journeys',
+        'all possible journeys',
+        'explore the entire destination',
     ))
 
+
+def _requires_full_inventory_at_depth(objective: str, depth: int) -> bool:
+    """Capture every viewport on the landing page unless all pages are explicit."""
+    if not _requires_full_page_inventory(objective):
+        return False
+    # For parent/section objectives, the base page is only a launch surface.
+    # Full scrolling begins after the requested child destination is opened.
+    if _objective_requests_submenu_inventory(objective):
+        return depth > 0
+    if _objective_is_parent_child_scope(objective):
+        return depth > 0
+    if depth <= 0:
+        return True
+    normalized = _normalize_match_text(objective)
+    if _objective_requests_submenu_inventory(objective):
+        return True
+    return any(phrase in normalized for phrase in (
+        'every page',
+        'each page',
+        'all pages',
+        'all linked pages',
+        'every destination',
+        'each destination',
+        'complete website',
+        'entire website',
+    ))
 
 def _objective_limits_to_current_page(objective: str) -> bool:
     normalized = _normalize_match_text(objective)
@@ -510,6 +817,10 @@ def _objective_targets(objective: str) -> list[str]:
     if 'plan your visit' in normalized and ('tickets and parks' in normalized or 'tickets parks' in normalized):
         return ['tickets parks', 'ticket buying guide', '3 step planning guide', 'lightning lane passes', 'maps', 'transportation']
 
+    hierarchy_path = _objective_hierarchy_path(objective)
+    if hierarchy_path:
+        return hierarchy_path
+
     known_phrases = [
         'accept all',
         'allow all',
@@ -523,6 +834,9 @@ def _objective_targets(objective: str) -> list[str]:
         'contact',
         'tickets and parks',
         'tickets parks',
+        '3 step planning guide',
+        'places to stay',
+        'disney resorts collection',
         'view special offers',
         'special offers',
         'preference',
@@ -546,6 +860,43 @@ def _objective_targets(objective: str) -> list[str]:
         if phrase not in ordered_phrases:
             ordered_phrases.append(phrase)
 
+    structured_children = _objective_submenu_children(objective)
+    if _objective_submenu_section(objective) and _objective_requests_submenu_inventory(objective) and not structured_children:
+        # The section heading is informational. The rendered submenu will be
+        # inspected after the parent hover and its visible child links will be
+        # inserted into the action plan dynamically.
+        return ['places to stay']
+
+    if _objective_requests_submenu_inventory(objective) and not structured_children:
+        inventory_parent_match = re.search(r'\bunder\s+(?:the\s+)?(?P<parent>[^.;,]+)', objective, re.I)
+        if inventory_parent_match:
+            parent = _normalize_match_text(inventory_parent_match.group('parent'))
+            if parent:
+                return [parent]
+    if structured_children and 'places to stay' in ordered_phrases:
+        # Parent is repeated before each child so the crawler must reopen the
+        # hover menu after returning from the previous destination.
+        structured_targets: list[str] = ['places to stay']
+        for index, child in enumerate(structured_children):
+            structured_targets.append(child)
+            if index < len(structured_children) - 1:
+                structured_targets.append('places to stay')
+        return structured_targets
+
+    # Explicitly separate the requested child from its parent. The phrase
+    # "starting from X under Y" is a common objective form and must not be
+    # parsed as one long child label.
+    starting_from_match = re.search(
+        r'\bstarting\s+from\s+(?P<child>.+?)\s+under\s+(?:the\s+)?(?P<parent>[^.;,]+)',
+        normalized,
+        re.I,
+    )
+    if starting_from_match:
+        child = starting_from_match.group('child').strip()
+        parent = starting_from_match.group('parent').strip()
+        if child and parent:
+            return [parent, child]
+
     explicit_action_targets = _objective_action_targets(raw)
     if any(action == 'hover' for action, _ in explicit_action_targets):
         action_labels = [label for _, label in explicit_action_targets]
@@ -559,6 +910,21 @@ def _objective_targets(objective: str) -> list[str]:
         consent_targets = [phrase for phrase in ordered_phrases if _is_consent_objective_target(phrase)]
         required_path = consent_targets + ['data and ai', 'cloud data engineering']
         return required_path + [phrase for phrase in ordered_phrases if phrase not in required_path]
+    if 'under' in normalized and 'tickets parks' in ordered_phrases and '3 step planning guide' in ordered_phrases:
+        return ['tickets parks', '3 step planning guide']
+    # Generic parent/child objective form, for example:
+    # \"Explore account settings under Profile\".
+    structured_text = re.sub(r'\s+', ' ', str(objective or '').strip())
+    generic_under_match = re.search(
+        r'(?:explore|open|navigate\s+to|find|select|click)\s+(?:user\s+journeys?\s+for\s+)?(?P<child>.+?)\s+under\s+(?:the\s+)?(?P<parent>[^.;,]+)',
+        structured_text,
+        re.I,
+    )
+    if generic_under_match:
+        child = _clean_objective_label(generic_under_match.group('child'))
+        parent = _clean_objective_label(generic_under_match.group('parent'))
+        if child and parent:
+            return [parent, child]
 
     # Natural-language objectives may introduce the child before describing
     # the menu interaction. Prefer explicit hover-parent/click-child order
@@ -599,20 +965,285 @@ def _objective_targets(objective: str) -> list[str]:
     return targets
 
 
+def _objective_requests_submenu_inventory(objective: str) -> bool:
+    """Whether the objective asks for every link revealed by a menu hover."""
+    normalized = _normalize_match_text(objective)
+    return bool(
+        re.search(r'\b(?:all|every)\s+(?:the\s+)?links?\b|\blinks?\s+under\b|\bexplore(?:\s+all(?:\s+possible)?(?:\s+user)?\s+journeys?)?\s+under\b', normalized)
+        and re.search(r'\bunder\b', normalized)
+    )
+
+
+def _objective_is_parent_child_scope(objective: str) -> bool:
+    """Whether the objective defines one child under one parent scope."""
+    normalized = _normalize_match_text(objective)
+    return bool(
+        re.search(r'\bunder\b', normalized)
+        and len(_objective_targets(objective)) >= 2
+        and not _objective_requests_submenu_inventory(objective)
+    )
+
+
+def _objective_parent_is_hover_only(objective: str, target_index: int) -> bool:
+    """The root of an ``under`` hierarchy reveals scope and is never a destination."""
+    return target_index == 0 and (
+        _objective_is_parent_child_scope(objective)
+        or _objective_requests_submenu_inventory(objective)
+    )
+
+
+def _objective_submenu_section(objective: str) -> str:
+    """Extract a submenu section heading used to scope child-link discovery."""
+    normalized = _normalize_match_text(objective)
+    if 'disney resorts collection' in normalized and re.search(r'\blinks?\s+under\b|\bunder\s+(?:the\s+)?(?:places to stay\s+)?disney resorts collection\b|\bunder\s+places to stay\b', normalized):
+        return 'disney resorts collection'
+    return ''
+
+
+def _objective_submenu_children(objective: str) -> list[str]:
+    """Extract the known child links listed below a Disney submenu heading."""
+    normalized = _normalize_match_text(objective)
+    if 'disney resorts collection' not in normalized:
+        return []
+    labels = (
+        'view all disney accommodations',
+        'deluxe villas',
+        'deluxe resort hotels',
+        'moderate resort hotels',
+        'value resort hotels',
+        'campgrounds',
+    )
+    positions = [(normalized.find(label), label) for label in labels if normalized.find(label) >= 0]
+    return [label for _, label in sorted(positions)]
+
+
+def _objective_is_dynamic_submenu_inventory(objective: str) -> bool:
+    return bool(_objective_requests_submenu_inventory(objective) and not _objective_submenu_children(objective))
+
+
+def _objective_has_structured_submenu(objective: str) -> bool:
+    return bool(_objective_submenu_section(objective) and _objective_submenu_children(objective))
+
+
+def _objective_requires_submenu_clicks(objective: str, target_index: int) -> bool:
+    """A child named under a navigation parent must be clicked, not just observed."""
+    normalized = _normalize_match_text(objective)
+    targets = _objective_targets(objective)
+    # Structured objectives repeat the parent before each child so the menu
+    # can be reopened. A repeated parent remains hover-only; its position in
+    # the expanded target list must not turn it into a click target.
+    if targets and 0 < target_index < len(targets) and targets[0] == targets[target_index]:
+        return False
+    submenu_path = 'under' in normalized and (
+        'places to stay' in normalized
+        or 'tickets and parks' in normalized
+        or 'tickets parks' in normalized
+    )
+    return target_index > 0 and (submenu_path or _objective_requests_submenu_inventory(objective))
+
+
+def _submenu_destination_candidates(actions: list[ClickCandidate], page_url: str, parent_label: str, section_heading: str = '') -> list[ClickCandidate]:
+    """Return only visible links contained by the requested submenu section.
+
+    The section heading is a boundary, not a destination. A link with the same
+    label as the heading is therefore excluded even if the site renders it as
+    an anchor. This prevents the parent/section controls and neighboring menu
+    columns from entering the exploration queue.
+    """
+    origin = urlparse(page_url).netloc.lower()
+    parent = _normalize_match_text(parent_label)
+    section = _normalize_match_text(section_heading)
+    selected: list[ClickCandidate] = []
+    seen: set[tuple[str, str]] = set()
+    for candidate in actions:
+        actionable_tag = candidate.tag in {'a', 'area', 'button'}
+        actionable_role = candidate.role in {'link', 'button', 'menuitem', 'tab'}
+        if not candidate.href or not (actionable_tag or actionable_role):
+            continue
+        destination = urlparse(candidate.href)
+        if destination.netloc.lower() not in {'', origin}:
+            continue
+        label = _normalize_match_text(candidate.text or candidate.value)
+        if not label or label == parent:
+            continue
+        relationship_text = _normalize_match_text(f'{candidate.section_heading} {candidate.parent_label}')
+        # A section objective must have a proven DOM relationship. Do not use
+        # loose substring matching or accept the heading itself as a child.
+        if section and not (
+            _normalize_match_text(candidate.section_heading) == section
+            or _normalize_match_text(candidate.parent_label) == section
+        ):
+            continue
+        if section and label == section:
+            continue
+        # Hash routes can represent distinct application states on the same
+        # page. Collection identity therefore includes the visible label and
+        # the complete destination, including its fragment.
+        key = (label, destination.geturl())
+        if key in seen or destination.geturl() == page_url:
+            continue
+        seen.add(key)
+        selected.append(candidate)
+    return selected
+
+
+def _newly_revealed_target_candidates(
+    before_actions: list[ClickCandidate],
+    after_actions: list[ClickCandidate],
+    target: str,
+    page_url: str,
+) -> list[ClickCandidate]:
+    """Find the planned child among controls introduced by a hover/expand."""
+    before_keys = {
+        (_normalize_match_text(action.text or action.value), _resolve_href(page_url, action.href).split('#', 1)[0])
+        for action in before_actions
+    }
+    origin = urlparse(page_url).netloc.lower()
+    matches: list[ClickCandidate] = []
+    for action in after_actions:
+        key = (_normalize_match_text(action.text or action.value), _resolve_href(page_url, action.href).split('#', 1)[0])
+        if key in before_keys or not _target_matches_text(target, action.text or action.value or action.href):
+            continue
+        destination = urlparse(_resolve_href(page_url, action.href)) if action.href else None
+        if destination and destination.netloc.lower() not in {'', origin}:
+            continue
+        if action.tag not in {'a', 'area', 'button'} and action.role not in {'link', 'button', 'menuitem', 'tab'}:
+            continue
+        matches.append(action)
+    return matches
+
+
+def _unique_exact_revealed_target_candidate(
+    actions: list[ClickCandidate],
+    target: str,
+    page_url: str,
+) -> list[ClickCandidate]:
+    """Resolve one exact visible child from a portal menu after parent hover."""
+    normalized_target = _normalize_match_text(target)
+    compact_target = normalized_target.replace(' ', '')
+    origin = urlparse(page_url).netloc.lower()
+    matches: list[ClickCandidate] = []
+    for action in actions:
+        label = _normalize_match_text(action.text or action.value)
+        if not label or not (label == normalized_target or label.replace(' ', '') == compact_target):
+            continue
+        if action.tag not in {'a', 'area', 'button'} and action.role not in {'link', 'button', 'menuitem', 'tab'}:
+            continue
+        destination = urlparse(_resolve_href(page_url, action.href)) if action.href else None
+        if destination and destination.netloc.lower() not in {'', origin}:
+            continue
+        matches.append(action)
+    return matches if len(matches) == 1 else []
+
+
+def _extract_section_child_actions(page, section_heading: str, parent_label: str) -> list[ClickCandidate]:
+    """Build a strict child allowlist from the rendered section DOM.
+
+    This deliberately does not infer membership from the global candidate
+    ranking. It finds the visible heading, walks its nearest DOM container,
+    and keeps only actionable descendants whose nearest preceding heading is
+    that exact heading.
+    """
+    section = _normalize_match_text(section_heading)
+    parent = _normalize_match_text(parent_label)
+    raw = page.evaluate(
+        """({section}) => {
+          const clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim();
+          const normalize = (value) => clean(value).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+          const compact = (value) => normalize(value).replace(/ /g, '');
+          const visible = (el) => {
+            const rect = el.getBoundingClientRect();
+            const style = getComputedStyle(el);
+            return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0.05;
+          };
+          const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6,[role="heading"]'));
+          const controls = Array.from(document.querySelectorAll('a[href], area[href], [role="link"], button, [role="button"], [role="menuitem"], [role="tab"], [data-href], [data-url]'));
+          const heading = section ? headings.find((el) => visible(el) && normalize(el.innerText || el.textContent) === section) : null;
+          const parentControl = !section ? controls.find((el) => {
+            if (!visible(el)) return false;
+            const names = [
+              el.innerText,
+              el.textContent,
+              el.getAttribute('aria-label'),
+              el.getAttribute('title'),
+            ].map(normalize).filter(Boolean);
+            return names.some((name) =>
+              name === parent ||
+              name.startsWith(parent + ' ') ||
+              compact(name) === compact(parent) ||
+              compact(name).startsWith(compact(parent))
+            );
+          }) : null;
+          if (!heading && !parentControl) return [];
+          const actionable = 'a[href], area[href], [role="link"], button, [role="button"], [role="menuitem"], [role="tab"], [data-href], [data-url]';
+          let container = (heading || parentControl).parentElement;
+          let found = [];
+          for (let level = 0; container && container !== document.body && level < 6; level += 1, container = container.parentElement) {
+            const localHeadings = Array.from(container.querySelectorAll('h1,h2,h3,h4,h5,h6,[role="heading"]'));
+            const children = Array.from(container.querySelectorAll(actionable)).filter((el) => visible(el));
+            const scoped = children.filter((el) => {
+              if (!section) return el !== parentControl;
+              const preceding = localHeadings.filter((candidate) => {
+                const position = candidate.compareDocumentPosition(el);
+                return Boolean(position & Node.DOCUMENT_POSITION_FOLLOWING);
+              });
+              return preceding.length && preceding[preceding.length - 1] === heading;
+            });
+            // The nearest wrapper may contain only the heading's first link.
+            // Keep walking upward and retain the largest set still bounded by
+            // this exact heading. This captures sibling links without leaking
+            // into the next menu section.
+            if (scoped.length > found.length) found = scoped;
+          }
+          return found.map((el) => ({
+            text: clean(el.innerText || el.textContent || el.getAttribute('aria-label') || el.getAttribute('title') || ''),
+            href: clean(el.href || el.getAttribute('href') || el.getAttribute('data-href') || el.getAttribute('data-url') || ''),
+          })).filter((item) => item.text && item.href);
+        }""",
+        {'section': section},
+    )
+    if not raw:
+        return []
+    actions = _extract_clickable_actions(page)
+    allowed = {
+        (_normalize_match_text(item.get('text')), _resolve_href(page.url, item.get('href', '')).split('#', 1)[0])
+        for item in raw
+    }
+    scoped: list[ClickCandidate] = []
+    for candidate in actions:
+        key = (_normalize_match_text(candidate.text or candidate.value), _resolve_href(page.url, candidate.href).split('#', 1)[0])
+        if key in allowed:
+            scoped.append(candidate)
+    # Membership has already been proven from the exact live section DOM.
+    # Reapplying heuristic section_heading metadata here can discard valid
+    # siblings when a site's accessibility/heading markup is inconsistent.
+    return _submenu_destination_candidates(scoped, page.url, parent_label, '')
+
+
 def _objective_match_score(candidate: ClickCandidate, objective: str) -> tuple[int, int]:
     text = _normalize_match_text(f'{candidate.text} {candidate.href} {candidate.value} {candidate.role} {candidate.element_id}')
     targets = _objective_targets(objective)
     for position, target in enumerate(targets):
         target_text = _normalize_match_text(target)
-        if target_text and target_text in text:
+        if _target_matches_text(target, text):
             return 1000 - position * 10, position
-        words = target_text.split()
-        if words and sum(word in text for word in words) == len(words):
-            return 800 - position * 10, position
     return 0, len(targets)
-def _derive_page_name(page_url: str, title: str | None = None) -> str:
-    if title and title.strip():
-        return title.strip()
+def _derive_page_name(
+    page_url: str,
+    title: str | None = None,
+    headings: list[str] | None = None,
+    primary_heading: str | None = None,
+) -> str:
+    cleaned_primary_heading = _safe_text(primary_heading)
+    if cleaned_primary_heading and len(cleaned_primary_heading) > 2:
+        return cleaned_primary_heading
+    cleaned_title = _safe_text(title)
+    if cleaned_title:
+        return cleaned_title
+    for heading in headings or []:
+        cleaned_heading = _safe_text(heading)
+        if cleaned_heading and len(cleaned_heading) > 2:
+            return cleaned_heading
     parsed = urlparse(page_url)
     slug = (parsed.path.strip('/').split('/')[-1] or parsed.netloc).replace('-', ' ').replace('_', ' ')
     return slug.title() if slug else 'Home'
@@ -780,6 +1411,15 @@ def _build_url_specific_fallback(application_url: str, parameters: dict[str, str
 def _should_hover_target(candidate: ClickCandidate, objective: str, current_target: str, next_target: str, visible_actions: list[ClickCandidate]) -> bool:
     if _objective_requires_hover(objective, current_target, candidate):
         return True
+    normalized_objective = _normalize_match_text(objective)
+    if next_target and 'under' in normalized_objective:
+        targets = _objective_targets(objective)
+        if targets and _normalize_match_text(current_target) == _normalize_match_text(targets[0]):
+            return True
+    if _objective_is_dynamic_submenu_inventory(objective):
+        targets = _objective_targets(objective)
+        if not targets or _normalize_match_text(current_target) == _normalize_match_text(targets[0]):
+            return True
     return bool(
         next_target
         and not _target_visible_in_actions(visible_actions, next_target)
@@ -809,19 +1449,24 @@ def _score_candidate(candidate: ClickCandidate, profile_text: str, objective: st
     return score
 
 
-def _choose_objective_actions(actions: list[ClickCandidate], profile_text: str, objective: str, target_index: int = 0) -> list[ClickCandidate]:
+def _choose_objective_actions(
+    actions: list[ClickCandidate],
+    profile_text: str,
+    objective: str,
+    target_index: int = 0,
+    target_override: str | None = None,
+) -> list[ClickCandidate]:
     """Choose the next objective control instead of clicking unrelated page controls."""
     targets = _objective_targets(objective)
-    target = targets[target_index] if target_index < len(targets) else ''
+    target = target_override if target_override is not None else (targets[target_index] if target_index < len(targets) else '')
     def target_score(action: ClickCandidate) -> int:
         if not target:
             return 0
         candidate_text = _normalize_match_text(f'{action.text} {action.href} {action.value} {action.role} {action.element_id}')
         target_text = _normalize_match_text(target)
-        if target_text and target_text in candidate_text:
+        if _target_matches_text(target, candidate_text):
             return 1000
-        words = target_text.split()
-        return 800 if words and all(word in candidate_text for word in words) else 0
+        return 0
 
     ranked = sorted(
         ((target_score(action), _score_candidate(action, profile_text, objective), action) for action in actions),
@@ -876,10 +1521,12 @@ def _objective_explicitly_clicks_target(objective: str, target: str, candidate: 
 def _can_hover_candidate(candidate: ClickCandidate) -> bool:
     label = _normalize_match_text(candidate.text or candidate.value or candidate.href)
     return (
-        candidate.tag == 'summary'
+        candidate.tag in {'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
+        or candidate.role == 'heading'
+        or candidate.tag == 'summary'
         or candidate.role in {'menuitem', 'tab'}
         or bool(re.search(
-            r'menu|navigation|tickets? parks?|data and ai|functional expertise|industries|knowledge hub|company|preference|workspace|report|offer',
+            r'menu|navigation|places? to stay|tickets(?:\s+and)?\s+parks?|data and ai|functional expertise|industries|knowledge hub|company|preference|workspace|report|offer',
             label,
             re.I,
         ))
@@ -898,13 +1545,82 @@ def _is_safe_observation_click(text: str, tag: str, objective: str = '') -> bool
     consent_authorized = any(phrase in normalized_objective for phrase in ('accept all', 'allow all', 'accept cookies'))
     if consent_action:
         return consent_authorized
-    if re.search(r'buy|purchase|checkout|delete|remove|logout|sign out|submit|create account|password', text, re.I):
+    # An explicitly requested anchor labelled "Buy ..." is navigation to a
+    # product or information page; clicking it does not itself purchase or
+    # submit data. Generic crawls must still skip transactional-looking links.
+    # Destructive/session controls remain blocked regardless of element type.
+    if re.search(r'delete|remove|logout|sign out|create account|password', text, re.I):
         return False
-    if tag in {'input', 'select', 'textarea', 'summary'}:
-        return True
+    if re.search(r'buy|purchase|checkout|submit', text, re.I):
+        explicitly_requested_navigation = tag == 'a' and any(
+            _target_matches_text(target, text)
+            for target in _objective_targets(objective)
+        )
+        return explicitly_requested_navigation
     if tag == 'a' and text:
         return True
+    if tag in {'input', 'select', 'textarea', 'summary'}:
+        return True
     return bool(re.search(r'menu|filter|details|learn more|view|open|expand|show|hide|tickets|parks|offers|search|explore|continue|next|preferences?|workspace|report lookup|lookup|settings?|manage|projects?', text, re.I))
+
+
+def _wait_for_dom_stability(page, quiet_ms: int = 600, timeout_ms: int = 1800) -> str:
+    """Wait until meaningful DOM mutations stop, with a strict upper bound."""
+    quiet_ms = max(250, min(int(quiet_ms or 600), 1500))
+    timeout_ms = max(quiet_ms, min(int(timeout_ms or 1800), 5000))
+    try:
+        result = page.evaluate(
+            """async ({ quietMs, timeoutMs }) => {
+              const root = document.documentElement;
+              if (!root || typeof MutationObserver === 'undefined') {
+                return 'dom_stability_unavailable';
+              }
+              return await new Promise((resolve) => {
+                let settled = false;
+                let quietTimer;
+                let hardTimer;
+                let observer;
+                const finish = (status) => {
+                  if (settled) return;
+                  settled = true;
+                  observer?.disconnect();
+                  clearTimeout(quietTimer);
+                  clearTimeout(hardTimer);
+                  resolve(status);
+                };
+                const isRelevant = (record) => {
+                  const target = record.target instanceof Element
+                    ? record.target
+                    : record.target?.parentElement;
+                  return !target?.closest?.('[data-browser-agent-overlay]');
+                };
+                const armQuietTimer = () => {
+                  clearTimeout(quietTimer);
+                  quietTimer = setTimeout(() => finish('dom_stable'), quietMs);
+                };
+                observer = new MutationObserver((records) => {
+                  if (records.some(isRelevant)) armQuietTimer();
+                });
+                observer.observe(root, {
+                  subtree: true,
+                  childList: true,
+                  characterData: true,
+                  attributes: true,
+                  attributeFilter: ['hidden', 'aria-expanded', 'aria-busy', 'disabled', 'href', 'src'],
+                });
+                hardTimer = setTimeout(() => finish('dom_stability_timeout'), timeoutMs);
+                requestAnimationFrame(() => requestAnimationFrame(armQuietTimer));
+              });
+            }""",
+            {'quietMs': quiet_ms, 'timeoutMs': timeout_ms},
+        )
+        return str(result or 'dom_stable')
+    except Exception:
+        try:
+            page.wait_for_timeout(min(quiet_ms, 500))
+        except Exception:
+            pass
+        return 'dom_stability_unavailable'
 
 
 def _wait_for_page_ready(page, timeout_ms: int = 15000, settle_ms: int = 700) -> str:
@@ -916,7 +1632,7 @@ def _wait_for_page_ready(page, timeout_ms: int = 15000, settle_ms: int = 700) ->
     except Exception:
         conditions.append('domcontentloaded_timeout')
     try:
-        page.wait_for_load_state('networkidle', timeout=min(timeout_ms, 5000))
+        page.wait_for_load_state('networkidle', timeout=min(timeout_ms, 2000))
         conditions.append('networkidle')
     except Exception:
         conditions.append('networkidle_timeout')
@@ -925,8 +1641,11 @@ def _wait_for_page_ready(page, timeout_ms: int = 15000, settle_ms: int = 700) ->
         conditions.append('document_complete')
     except Exception:
         conditions.append('document_complete_timeout')
-    page.wait_for_timeout(settle_ms)
-    conditions.append('render_settled')
+    conditions.append(_wait_for_dom_stability(
+        page,
+        quiet_ms=min(settle_ms, 700),
+        timeout_ms=min(2200, max(1400, timeout_ms // 6)),
+    ))
     return '+'.join(conditions)
 
 
@@ -982,6 +1701,12 @@ def _candidate_preview(candidate: ClickCandidate, score: int | None = None) -> d
         'selector': candidate.selector,
         'value': candidate.value,
         'input_type': candidate.input_type,
+        'section_heading': candidate.section_heading,
+        'parent_selector': candidate.parent_selector,
+        'parent_label': candidate.parent_label,
+        'parent_tag': candidate.parent_tag,
+        'parent_role': candidate.parent_role,
+        'parent_interaction': candidate.parent_interaction,
     }
     if score is not None:
         payload['score'] = score
@@ -1137,7 +1862,7 @@ def _capture_full_page_inventory(
         document_height = max(viewport_height, int(metrics.get('height', 0) or 0))
         at_bottom = current_y + viewport_height >= document_height - 4
         if at_bottom:
-            page.wait_for_timeout(900)
+            _wait_for_dom_stability(page, quiet_ms=700, timeout_ms=2200)
             refreshed_height = int(page.evaluate("() => Math.max((document.scrollingElement || document.documentElement).scrollHeight || 0, document.body?.scrollHeight || 0)") or document_height)
             if refreshed_height <= document_height + 2:
                 break
@@ -1151,7 +1876,11 @@ def _capture_full_page_inventory(
             scroll_live_page(page, target_y, f'Scrolling to viewport {viewport_index + 2}')
         else:
             page.evaluate("(targetY) => window.scrollTo({ top: targetY, behavior: 'auto' })", target_y)
-            page.wait_for_timeout(750)
+        stability_condition = _wait_for_dom_stability(
+            page,
+            quiet_ms=400 if live_preview else 500,
+            timeout_ms=1200 if live_preview else 1500,
+        )
         after_metrics = page.evaluate(
             """() => {
               const root = document.scrollingElement || document.documentElement;
@@ -1174,6 +1903,7 @@ def _capture_full_page_inventory(
             'to_y': int(after_metrics.get('y', target_y) or target_y),
             'document_height': int(after_metrics.get('height', document_height) or document_height),
             'new_controls': len(new_actions),
+            'stability': stability_condition,
             'screenshot_after': after_screenshot,
         })
         interactions.append(_build_interaction(
@@ -1188,7 +1918,7 @@ def _capture_full_page_inventory(
             state_before=f'scroll_y:{current_y}',
             state_after=f"scroll_y:{int(after_metrics.get('y', target_y) or target_y)}",
             resulted_in=f'viewport_scanned:new_controls={len(new_actions)}',
-            wait_condition='render_settled',
+            wait_condition=stability_condition,
             coordinates={
                 'x': 0.0,
                 'y': float(after_metrics.get('y', target_y) or target_y),
@@ -1269,7 +1999,7 @@ def _capture_full_page_inventory(
             scroll_live_page(page, 0, 'Returning to top for objective actions')
         else:
             page.evaluate("() => window.scrollTo(0, 0)")
-            page.wait_for_timeout(500)
+        top_stability = _wait_for_dom_stability(page, quiet_ms=450, timeout_ms=1200)
         top_screenshot = _capture_viewport_screenshot(page, f'page_{sequence}_returned_top')
         interactions.append(_build_interaction(
             sequence_id=sequence,
@@ -1283,7 +2013,7 @@ def _capture_full_page_inventory(
             state_before='bottom_reached',
             state_after='scroll_y:0',
             resulted_in='returned_to_top',
-            wait_condition='render_settled',
+            wait_condition=top_stability,
             event_timestamp=datetime.now(timezone.utc).isoformat(),
             screenshot_before=final_screenshot or None,
             screenshot_after=top_screenshot or None,
@@ -1375,6 +2105,10 @@ def _execute_observation_click(page, candidate: ClickCandidate, sequence: int, c
             'role': candidate.role,
             'selector': candidate.selector or candidate.href or candidate.text,
             'href': candidate.href,
+            'section_heading': candidate.section_heading,
+            'parent_selector': candidate.parent_selector,
+            'parent_label': candidate.parent_label,
+            'parent_interaction': candidate.parent_interaction,
             'coordinates': coordinates,
             'screenshot_before': str(before),
             'sequence': sequence,
@@ -1411,6 +2145,10 @@ def _execute_observation_click(page, candidate: ClickCandidate, sequence: int, c
             'selector': candidate.selector or candidate.href or candidate.text,
             'destination_url': after_url,
             'destination_title': after_title,
+            'section_heading': candidate.section_heading,
+            'parent_selector': candidate.parent_selector,
+            'parent_label': candidate.parent_label,
+            'parent_interaction': candidate.parent_interaction,
             'result': result,
             'coordinates': coordinates,
             'network_count': len(responses),
@@ -1464,6 +2202,10 @@ def _execute_observation_hover(page, candidate: ClickCandidate, sequence: int, c
             'element': candidate.text or candidate.value or candidate.href,
             'tag': candidate.tag,
             'role': candidate.role,
+            'section_heading': candidate.section_heading,
+            'parent_selector': candidate.parent_selector,
+            'parent_label': candidate.parent_label,
+            'parent_interaction': candidate.parent_interaction,
             'selector': candidate.selector or candidate.href or candidate.text,
             'coordinates': coordinates,
             'screenshot_before': str(before),
@@ -1488,6 +2230,10 @@ def _execute_observation_hover(page, candidate: ClickCandidate, sequence: int, c
             'selector': candidate.selector or candidate.href or candidate.text,
             'result': result,
             'candidate_count_after_hover': len(revealed_actions),
+            'section_heading': candidate.section_heading,
+            'parent_selector': candidate.parent_selector,
+            'parent_label': candidate.parent_label,
+            'parent_interaction': candidate.parent_interaction,
             'coordinates': coordinates,
             'screenshot_after': str(after),
             'sequence': sequence,
@@ -1572,6 +2318,12 @@ def _track_candidates(ledger: dict[str, dict[str, object]], page_url: str, appli
             "candidate_id": key, "page_url": page_url, "element": candidate.text or candidate.value or candidate.href,
             "selector": candidate.selector, "href": candidate.href, "tag": candidate.tag, "role": candidate.role,
             "status": status, "reason": reason,
+            "section_heading": candidate.section_heading,
+            "parent_selector": candidate.parent_selector,
+            "parent_label": candidate.parent_label,
+            "parent_tag": candidate.parent_tag,
+            "parent_role": candidate.parent_role,
+            "parent_interaction": candidate.parent_interaction,
         }
 
 
@@ -1581,22 +2333,62 @@ def _set_candidate_status(ledger: dict[str, dict[str, object]], page_url: str, c
         ledger[key]["status"] = status
         ledger[key]["reason"] = reason
 
-def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max_depth: int = 5, max_pages: int = 8, follow_links: bool = True, objective: str = "Discover the primary user journey from the application home page.", min_events: int = 10) -> tuple[list[JourneyStep], list[str], dict[str, object]]:
+def _crawl_with_playwright(
+    application_url: str,
+    parameters: dict[str, str],
+    max_depth: int = 5,
+    max_pages: int = 8,
+    follow_links: bool = True,
+    objective: str = "Discover the primary user journey from the application home page.",
+    min_events: int = 10,
+    stream_key: str = '',
+    execution_plan: list[JourneyPlanStep] | None = None,
+) -> tuple[list[JourneyStep], list[str], dict[str, object]]:
     max_depth = _normalise_crawl_setting(max_depth, 3, 0, 10)
     max_pages = _normalise_crawl_setting(max_pages, 8, 1, 50)
     min_events = _normalise_crawl_setting(min_events, 10, 1, 100)
+    requested_max_pages = max_pages
+    if _requires_full_page_inventory(objective) and not _requires_full_inventory_at_depth(objective, 1):
+        max_pages = min(max_pages, 4)
     if sync_playwright is None:
         raise RuntimeError('Playwright is not installed')
 
-    clear_events(application_url)
+    event_stream_key = stream_key or application_url
+    clear_events(event_stream_key)
     profile_text = get_browser_agent_profile(application_url, objective)
     steps: list[JourneyStep] = []
     reasoning_bits: list[str] = []
     test_hints: list[str] = []
     visited: set[str] = set()
+    visited_states: set[tuple[str, int]] = set()
     queue: deque[tuple[str, int, int]] = deque([(application_url, 0, 0)])
     sequence = 1
     candidate_ledger: dict[str, dict[str, object]] = {}
+    structured_submenu = _objective_has_structured_submenu(objective)
+    dynamic_submenu_inventory = _objective_is_dynamic_submenu_inventory(objective)
+    parent_child_scope = _objective_is_parent_child_scope(objective)
+    scoped_navigation = structured_submenu or dynamic_submenu_inventory or parent_child_scope
+    execution_plan = list(execution_plan or _compile_journey_execution_plan(objective))
+    planned_objective_targets = _execution_plan_targets(execution_plan) or _objective_targets(objective)
+    publish_event(event_stream_key, {
+        'type': 'execution_plan_compiled',
+        'status': 'Journey plan ready',
+        'url': application_url,
+        'objective': objective,
+        'steps': [step.__dict__ for step in execution_plan],
+        'reason': 'The crawler will resolve each target against the live DOM and choose hover, expand, click, navigation, or informational scoping at execution time.',
+    })
+    parent_target_label = planned_objective_targets[0] if planned_objective_targets else ''
+    required_child_labels: set[str] = {
+        _normalize_match_text(target)
+        for target in planned_objective_targets[1:]
+        if _normalize_match_text(target) != _normalize_match_text(parent_target_label)
+    }
+    completed_child_labels: set[str] = set()
+    captured_destination_urls: set[str] = set()
+    state_budget = max_pages + len(_objective_submenu_children(objective)) if structured_submenu else (max_pages + 8 if dynamic_submenu_inventory else max_pages)
+    if scoped_navigation:
+        state_budget = max(state_budget, (len(planned_objective_targets) * 2) + 2)
 
     with sync_playwright() as playwright:
         cdp_url = os.environ.get('BROWSER_CDP_URL', '').strip()
@@ -1605,9 +2397,9 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
             try:
                 browser = connect_live_browser(playwright, application_url, timeout_seconds=45)
                 using_live_browser = True
-                publish_event(application_url, {'type': 'status', 'status': 'Connected to live browser', 'url': application_url})
+                publish_event(event_stream_key, {'type': 'status', 'status': 'Connected to live browser', 'url': application_url})
             except Exception as exc:
-                publish_event(application_url, {'type': 'status', 'status': 'Live browser unavailable; using headless browser', 'url': application_url, 'result': f'{type(exc).__name__}: {exc}'})
+                publish_event(event_stream_key, {'type': 'status', 'status': 'Live browser unavailable; using headless browser', 'url': application_url, 'result': f'{type(exc).__name__}: {exc}'})
                 cdp_url = ''
                 browser = playwright.chromium.launch(headless=True)
         else:
@@ -1616,21 +2408,29 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
         if using_live_browser and context.pages:
             # noVNC renders the first tab; keep the API and live view aligned.
             page = context.pages[0]
+            # A new journey must not inherit popup tabs left by a previous run.
+            for stale_page in context.pages[1:]:
+                try:
+                    stale_page.close()
+                except Exception:
+                    pass
         else:
             page = context.pages[0] if context.pages else context.new_page()
         try:
             page.bring_to_front()
         except Exception:
             pass
-        live_observers = _install_live_page_observers(page, application_url)
+        live_observers = _install_live_page_observers(page, event_stream_key)
         try:
-            while queue and len(visited) < max_pages:
+            while queue and len(visited_states) < state_budget:
                 current_url, depth, target_index = queue.popleft()
-                target_index = max(0, min(int(target_index or 0), len(_objective_targets(objective))))
-                if current_url in visited:
+                target_index = max(0, min(int(target_index or 0), len(planned_objective_targets)))
+                state_key = (current_url, target_index)
+                if state_key in visited_states:
                     continue
+                visited_states.add(state_key)
                 visited.add(current_url)
-                publish_event(application_url, {'type': 'status', 'status': 'Navigating', 'url': current_url, 'depth': depth})
+                publish_event(event_stream_key, {'type': 'status', 'status': 'Navigating', 'url': current_url, 'depth': depth})
                 page.goto(current_url, wait_until='domcontentloaded', timeout=30000)
                 if using_live_browser:
                     prepare_live_page(page)
@@ -1639,8 +2439,13 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                 page_snapshot = _capture_dom_snapshot(page)
                 page_screenshot = _capture_viewport_screenshot(page, f'page_{sequence}_loaded')
                 signals = _extract_page_signals(page)
-                current_title = _derive_page_name(page.url, signals.get('title') or page.title())
-                publish_event(application_url, {'type': 'page_loaded', 'status': 'Waiting', 'url': page.url, 'title': current_title, 'depth': depth, 'dom_snapshot_captured': bool(page_snapshot), 'screenshot_after': page_screenshot})
+                current_title = _derive_page_name(
+                    page.url,
+                    signals.get('title') or page.title(),
+                    signals.get('headings'),
+                    signals.get('primaryHeading'),
+                )
+                publish_event(event_stream_key, {'type': 'page_loaded', 'status': 'Waiting', 'url': page.url, 'title': current_title, 'depth': depth, 'dom_snapshot_captured': bool(page_snapshot), 'screenshot_after': page_screenshot})
                 headings = [h for h in signals.get('headings', []) if h]
                 buttons = [b for b in signals.get('buttons', []) if b]
                 links = [l for l in signals.get('links', []) if l]
@@ -1648,7 +2453,7 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                 menus = [m for m in signals.get('menus', []) if m]
                 sections = [s for s in signals.get('sections', []) if s]
                 forms = signals.get('forms', []) or []
-                publish_event(application_url, {
+                publish_event(event_stream_key, {
                     'type': 'page_scanned',
                     'status': 'Inspecting DOM',
                     'url': page.url,
@@ -1713,18 +2518,25 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                 reasoning_bits.append(scan_summary)
 
                 explicit_action_targets = _objective_action_targets(objective)
-                full_page_inventory_enabled = _requires_full_page_inventory(objective)
-                generic_inventory_mode = full_page_inventory_enabled and not explicit_action_targets
+                base_state = page.url.split('#', 1)[0].rstrip('/') == application_url.split('#', 1)[0].rstrip('/')
+                # A scoped crawl revisits the base page only to reopen its
+                # parent menu. Evidence scrolling belongs to child
+                # destinations, never to these navigation-only revisits.
+                full_page_inventory_enabled = _requires_full_inventory_at_depth(objective, depth) and not (scoped_navigation and base_state)
+                pending_scoped_targets = scoped_navigation and target_index < len(planned_objective_targets)
+                generic_inventory_mode = full_page_inventory_enabled and not explicit_action_targets and not pending_scoped_targets
                 if full_page_inventory_enabled:
                     full_inventory_interactions, sequence, actions_for_inventory, inventory_summary = _capture_full_page_inventory(
                         page,
                         sequence,
                         page.url,
-                        application_url,
-                        return_to_top=bool(explicit_action_targets),
+                        event_stream_key,
+                        return_to_top=bool(explicit_action_targets or pending_scoped_targets),
                         live_preview=using_live_browser,
                     )
                     interactions.extend(full_inventory_interactions)
+                    if scoped_navigation and not base_state:
+                        captured_destination_urls.add(page.url.rstrip('/'))
                     signals = _extract_page_signals(page)
                     reasoning_bits.append(
                         f"Full page inventory captured {inventory_summary['control_count']} controls across "
@@ -1739,14 +2551,14 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                             sequence,
                             page.url,
                             min(minimum_remaining, 4),
-                            application_url,
+                            event_stream_key,
                             page_snapshot,
                             page_screenshot,
                         )
                         interactions.extend(inventory_interactions)
                 _track_candidates(candidate_ledger, page.url, application_url, actions_for_inventory, objective)
 
-                if generic_inventory_mode and follow_links and depth < max_depth and not _objective_limits_to_current_page(objective):
+                if generic_inventory_mode and not scoped_navigation and follow_links and depth < max_depth and not _objective_limits_to_current_page(objective):
                     available_slots = max(0, max_pages - len(visited) - len(queue))
                     for candidate in _generic_internal_link_candidates(
                         actions_for_inventory,
@@ -1760,7 +2572,7 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                             continue
                         queue.append((target_url, depth + 1, 0))
                         _set_candidate_status(candidate_ledger, page.url, candidate, 'queued', 'Queued for generic internal-page discovery')
-                        publish_event(application_url, {
+                        publish_event(event_stream_key, {
                             'type': 'page_queued',
                             'status': 'Queued for exploration',
                             'url': page.url,
@@ -1769,22 +2581,65 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                             'selector': candidate.selector,
                         })
 
-                objective_targets = [] if generic_inventory_mode else _objective_targets(objective)
+                # Preserve targets discovered from a rendered submenu across
+                # destination visits and base-page revisits. Re-parsing the
+                # original objective here loses dynamic child links.
+                objective_targets = [] if generic_inventory_mode else list(planned_objective_targets)
+                submenu_inventory_mode = _objective_requests_submenu_inventory(objective)
+                submenu_section = _objective_submenu_section(objective)
 
                 hovered_targets: set[str] = set()
-                should_follow_objective = bool(objective_targets) and depth < max_depth
-                should_browse_links = follow_links and depth < max_depth and not generic_inventory_mode
+                should_follow_objective = bool(objective_targets) and target_index < len(objective_targets) and _can_execute_objective_at_depth(objective, depth, max_depth)
+                should_browse_links = follow_links and depth < max_depth and not generic_inventory_mode and not parent_child_scope and not (submenu_inventory_mode and target_index >= len(objective_targets))
                 if should_follow_objective or should_browse_links:
                     current_target_index = target_index
                     performed_clicks = 0
-                    max_objective_clicks = max(1, min(max(len(objective_targets), min_events), max_pages * 3, 20))
+                    max_objective_clicks = (
+                        max(1, min(max(len(objective_targets), min_events), 100))
+                        if scoped_navigation
+                        else max(1, min(max(len(objective_targets), min_events), max_pages * 3, 20))
+                    )
+                    submenu_allowlist: set[tuple[str, str]] = set()
+                    parent_child_allowlist: set[tuple[str, str]] = set()
                     while performed_clicks < max_objective_clicks:
                         actions = _extract_clickable_actions(page)
+                        current_target_for_filter = objective_targets[current_target_index] if current_target_index < len(objective_targets) else ''
+                        parent_for_filter = objective_targets[0] if objective_targets else ''
+                        if (
+                            submenu_inventory_mode
+                            and submenu_allowlist
+                            and _normalize_match_text(current_target_for_filter) != _normalize_match_text(parent_for_filter)
+                        ):
+                            actions = [
+                                action for action in actions
+                                if (
+                                    _normalize_match_text(action.text or action.value),
+                                    _resolve_href(page.url, action.href).split('#', 1)[0],
+                                ) in submenu_allowlist
+                            ]
+                        if (
+                            parent_child_scope
+                            and parent_child_allowlist
+                            and _normalize_match_text(current_target_for_filter) != _normalize_match_text(parent_for_filter)
+                        ):
+                            actions = [
+                                action for action in actions
+                                if (
+                                    _normalize_match_text(action.text or action.value),
+                                    _resolve_href(page.url, action.href).split('#', 1)[0],
+                                ) in parent_child_allowlist
+                            ]
                         _track_candidates(candidate_ledger, page.url, application_url, actions, objective)
                         all_scored = sorted(((_score_candidate(action, profile_text, objective), action) for action in actions), key=lambda item: item[0], reverse=True)
-                        selected_actions = _choose_objective_actions(actions, profile_text, objective, current_target_index)
+                        selected_actions = _choose_objective_actions(
+                            actions,
+                            profile_text,
+                            objective,
+                            current_target_index,
+                            target_override=current_target_for_filter,
+                        )
                         current_objective_target = objective_targets[current_target_index] if current_target_index < len(objective_targets) else ''
-                        publish_event(application_url, {
+                        publish_event(event_stream_key, {
                             'type': 'candidate_actions',
                             'status': 'Planning next action',
                             'url': page.url,
@@ -1797,7 +2652,7 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                         })
                         if not selected_actions:
                             if _is_consent_objective_target(current_objective_target):
-                                publish_event(application_url, {
+                                publish_event(event_stream_key, {
                                     'type': 'consent_not_present',
                                     'status': 'Cookie consent previously resolved',
                                     'url': page.url,
@@ -1807,7 +2662,7 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                                 })
                                 current_target_index += 1
                                 continue
-                            publish_event(application_url, {
+                            publish_event(event_stream_key, {
                                 'type': 'objective_waiting',
                                 'status': 'No matching target found',
                                 'url': page.url,
@@ -1820,13 +2675,25 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                         next_objective_target = objective_targets[current_target_index + 1] if current_target_index + 1 < len(objective_targets) else ''
                         hover_candidate = selected_actions[0]
                         hover_required = _objective_requires_hover(objective, current_objective_target, hover_candidate)
-                        click_explicit = _objective_explicitly_clicks_target(objective, current_objective_target, hover_candidate)
+                        click_explicit = (
+                            _objective_explicitly_clicks_target(objective, current_objective_target, hover_candidate)
+                            or _objective_requires_submenu_clicks(objective, current_target_index)
+                        )
+                        hierarchy_parent_hover_only = _objective_parent_is_hover_only(objective, current_target_index)
+                        if hierarchy_parent_hover_only:
+                            click_explicit = False
+                        # In a submenu-inventory objective the navigation
+                        # parent is always an observation surface. It may
+                        # reveal the menu, but it is never a destination.
+                        parent_target = objective_targets[0] if objective_targets else ''
+                        if submenu_inventory_mode and parent_target and _normalize_match_text(current_objective_target) == _normalize_match_text(parent_target):
+                            click_explicit = False
                         should_hover_target = (
                             current_objective_target not in hovered_targets
                             and _should_hover_target(hover_candidate, objective, current_objective_target, next_objective_target, actions)
                         )
                         if should_hover_target:
-                            hover_interaction, revealed_actions = _execute_observation_hover(page, hover_candidate, sequence, page.url, application_url, live_preview=using_live_browser)
+                            hover_interaction, revealed_actions = _execute_observation_hover(page, hover_candidate, sequence, page.url, event_stream_key, live_preview=using_live_browser)
                             hover_failed = hover_interaction is None or any(
                                 word in str(hover_interaction.resulted_in or '').lower()
                                 for word in ('failed', 'error', 'timeout', 'blocked')
@@ -1844,7 +2711,7 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                                 performed_clicks += 1
                             hovered_targets.add(current_objective_target)
                             if hover_failed:
-                                publish_event(application_url, {
+                                publish_event(event_stream_key, {
                                     'type': 'objective_waiting',
                                     'status': 'Required hover failed',
                                     'url': page.url,
@@ -1853,9 +2720,185 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                                     'reason': 'The required hover action failed; the target was not clicked as a fallback.',
                                 })
                                 break
+                            if submenu_inventory_mode and not _objective_has_structured_submenu(objective):
+                                submenu_candidates = _extract_section_child_actions(
+                                    page,
+                                    submenu_section,
+                                    hover_candidate.text or hover_candidate.value or hover_candidate.href,
+                                )
+                                submenu_allowlist = {
+                                    (_normalize_match_text(candidate.text or candidate.value), _resolve_href(page.url, candidate.href).split('#', 1)[0])
+                                    for candidate in submenu_candidates
+                                }
+                                if dynamic_submenu_inventory and submenu_candidates and len(planned_objective_targets) <= 1:
+                                    parent_target = _normalize_match_text(current_objective_target or hover_candidate.text or hover_candidate.value or hover_candidate.href)
+                                    discovered_targets: list[str] = [parent_target]
+                                    for index, candidate in enumerate(submenu_candidates):
+                                        label = _normalize_match_text(candidate.text or candidate.value or candidate.href)
+                                        if not label:
+                                            continue
+                                        discovered_targets.append(label)
+                                        if index < len(submenu_candidates) - 1:
+                                            discovered_targets.append(parent_target)
+                                    objective_targets = discovered_targets
+                                    planned_objective_targets = list(discovered_targets)
+                                    # One destination state and one parent-resume
+                                    # state are required per child. Expand the
+                                    # budget after the live collection is known.
+                                    state_budget = max(state_budget, len(visited_states) + (len(submenu_candidates) * 2) + 2)
+                                    required_child_labels = {
+                                        _normalize_match_text(candidate.text or candidate.value or candidate.href)
+                                        for candidate in submenu_candidates
+                                        if _normalize_match_text(candidate.text or candidate.value or candidate.href)
+                                    }
+                                    current_target_index = 1
+                                    publish_event(event_stream_key, {
+                                        'type': 'submenu_targets_discovered',
+                                        'status': 'Discovered visible submenu targets',
+                                        'url': page.url,
+                                        'title': current_title,
+                                        'section_heading': submenu_section,
+                                        'targets': discovered_targets[1::2],
+                                        'reason': 'Child links were read from the rendered submenu; the section heading was not treated as a link.',
+                                    })
+                                    publish_event(event_stream_key, {
+                                        'type': 'execution_plan_expanded',
+                                        'status': 'Collection child sequence ready',
+                                        'url': page.url,
+                                        'parent_target': parent_target,
+                                        'section_heading': submenu_section,
+                                        'children': [candidate.text or candidate.value for candidate in submenu_candidates],
+                                        'sequence': [
+                                            {
+                                                'order': index + 1,
+                                                'action': 'click_capture_then_resume_parent',
+                                                'target': candidate.text or candidate.value,
+                                                'destination_url': _resolve_href(page.url, candidate.href),
+                                            }
+                                            for index, candidate in enumerate(submenu_candidates)
+                                        ],
+                                    })
+                                    continue
+                                if dynamic_submenu_inventory and not submenu_candidates:
+                                    publish_event(event_stream_key, {
+                                        'type': 'objective_blocked',
+                                        'status': 'Requested section or child links not found',
+                                        'url': page.url,
+                                        'title': current_title,
+                                        'parent_target': hover_candidate.text or hover_candidate.value or hover_candidate.href,
+                                        'section_heading': submenu_section,
+                                        'reason': 'The requested parent was revealed, but the named section did not contain visible actionable same-origin child links. The parent was not clicked and unrelated links were not explored.',
+                                    })
+                                    break
+                                queued = 0
+                                for submenu_candidate in submenu_candidates:
+                                    destination = _resolve_href(page.url, submenu_candidate.href)
+                                    if destination in visited or any(item[0] == destination for item in queue):
+                                        continue
+                                    if len(visited) + len(queue) >= max_pages:
+                                        break
+                                    queue.append((destination, depth + 1, len(objective_targets)))
+                                    queued += 1
+                                publish_event(event_stream_key, {
+                                    'type': 'submenu_inventory_queued',
+                                    'status': 'Queued all visible submenu links',
+                                    'url': page.url,
+                                    'title': current_title,
+                                    'parent_target': hover_candidate.text or hover_candidate.value or hover_candidate.href,
+                                    'candidate_count': len(submenu_candidates),
+                                    'queued_count': queued,
+                                    'reason': 'The objective requested all links under the hovered navigation parent.',
+                                })
+                                if submenu_section:
+                                    publish_event(event_stream_key, {
+                                        'type': 'submenu_section_inventory_completed',
+                                        'status': 'Queued links under submenu section',
+                                        'url': page.url,
+                                        'section_heading': submenu_section,
+                                        'reason': 'The section heading is informational and was not clicked; only its child links are explored.',
+                                    })
+                                    break
+                            if parent_child_scope and not submenu_inventory_mode:
+                                scoped_children = _extract_section_child_actions(
+                                    page,
+                                    '',
+                                    current_objective_target or hover_candidate.text or hover_candidate.value or hover_candidate.href,
+                                )
+                                # Some menus render in a portal outside the
+                                # trigger's ancestor container. In that case,
+                                # use the next compiled target and only accept
+                                # a control newly made visible by this hover.
+                                planned_child = next_objective_target
+                                revealed_target_children = _newly_revealed_target_candidates(
+                                    actions,
+                                    revealed_actions,
+                                    planned_child,
+                                    page.url,
+                                ) if planned_child else []
+                                if planned_child and not revealed_target_children:
+                                    # Some navigation systems keep hidden menu
+                                    # links measurable before hover or render
+                                    # the popup in a body-level portal. Accept
+                                    # only one exact visible child after the
+                                    # verified parent hover.
+                                    revealed_target_children = _unique_exact_revealed_target_candidate(
+                                        revealed_actions,
+                                        planned_child,
+                                        page.url,
+                                    )
+                                if revealed_target_children:
+                                    scoped_children = revealed_target_children
+                                parent_child_allowlist = {
+                                    (_normalize_match_text(candidate.text or candidate.value), _resolve_href(page.url, candidate.href).split('#', 1)[0])
+                                    for candidate in scoped_children
+                                }
+                                # A strict ``child under parent`` objective may
+                                # never escape through the parent's href. If
+                                # hover did not prove the requested child in
+                                # the rendered parent scope, stop cleanly.
+                                can_navigate_parent = False
+                                if not parent_child_allowlist:
+                                    publish_event(event_stream_key, {
+                                        'type': 'objective_blocked',
+                                        'status': 'Requested child not found in parent scope',
+                                        'url': page.url,
+                                        'title': current_title,
+                                        'parent_target': parent_target,
+                                        'child_target': next_objective_target,
+                                        'reason': 'The requested parent was found, but no actionable descendant child was proven in its DOM container. Unrelated page controls were not explored.',
+                                    })
+                                    break
+                            if submenu_inventory_mode and _objective_has_structured_submenu(objective):
+                                structured_candidates = _extract_section_child_actions(
+                                    page,
+                                    submenu_section,
+                                    hover_candidate.text or hover_candidate.value or hover_candidate.href,
+                                )
+                                submenu_allowlist = {
+                                    (_normalize_match_text(candidate.text or candidate.value), _resolve_href(page.url, candidate.href).split('#', 1)[0])
+                                    for candidate in structured_candidates
+                                }
                             if next_objective_target:
-                                if _target_visible_in_actions(revealed_actions, next_objective_target):
-                                    publish_event(application_url, {
+                                if parent_child_scope:
+                                    revealed_actions = [
+                                        action for action in revealed_actions
+                                        if (
+                                            _normalize_match_text(action.text or action.value),
+                                            _resolve_href(page.url, action.href).split('#', 1)[0],
+                                        ) in parent_child_allowlist
+                                    ]
+                                scoped_revealed_actions = [
+                                    action for action in revealed_actions
+                                    if (
+                                        not submenu_allowlist
+                                        or (
+                                            _normalize_match_text(action.text or action.value),
+                                            _resolve_href(page.url, action.href).split('#', 1)[0],
+                                        ) in submenu_allowlist
+                                    )
+                                ]
+                                if _target_visible_in_actions(scoped_revealed_actions, next_objective_target):
+                                    publish_event(event_stream_key, {
                                         'type': 'objective_target_revealed',
                                         'status': 'Target revealed',
                                         'url': page.url,
@@ -1866,19 +2909,20 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                                     })
                                     current_target_index = min(current_target_index + 1, len(objective_targets))
                                     continue
-                                publish_event(application_url, {
-                                    'type': 'objective_waiting',
-                                    'status': 'Menu target not visible after hover',
-                                    'url': page.url,
-                                    'title': current_title,
-                                    'current_target': current_objective_target,
-                                    'required_child_target': next_objective_target,
-                                    'hovered_element': hover_candidate.text or hover_candidate.value or hover_candidate.href,
-                                    'reason': 'The required child target was not visible after the menu hover; the parent link was not clicked.',
-                                })
-                                break
-                            if hover_required and not click_explicit:
-                                publish_event(application_url, {
+                                if not (parent_child_scope and can_navigate_parent):
+                                    publish_event(event_stream_key, {
+                                        'type': 'objective_waiting',
+                                        'status': 'Menu target not visible after hover',
+                                        'url': page.url,
+                                        'title': current_title,
+                                        'current_target': current_objective_target,
+                                        'required_child_target': next_objective_target,
+                                        'hovered_element': hover_candidate.text or hover_candidate.value or hover_candidate.href,
+                                        'reason': 'The required child target was not visible after the menu hover and no verified parent destination was available.',
+                                    })
+                                    break
+                            if (hover_required or hierarchy_parent_hover_only) and not click_explicit:
+                                publish_event(event_stream_key, {
                                     'type': 'hover_only_completed',
                                     'status': 'Hover completed',
                                     'url': page.url,
@@ -1888,8 +2932,8 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                                 })
                                 current_target_index = min(current_target_index + 1, len(objective_targets))
                                 continue
-                        if hover_required and not click_explicit:
-                            publish_event(application_url, {
+                        if (hover_required or hierarchy_parent_hover_only) and not click_explicit:
+                            publish_event(event_stream_key, {
                                 'type': 'candidate_skipped',
                                 'status': 'Click suppressed',
                                 'url': page.url,
@@ -1904,7 +2948,7 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                             if performed_clicks > 0 and current_objective_target:
                                 target_match_score, _ = _objective_match_score(action, current_objective_target)
                                 if target_match_score <= 0:
-                                    publish_event(application_url, {
+                                    publish_event(event_stream_key, {
                                         'type': 'candidate_skipped',
                                         'status': 'Skipped',
                                         'url': page.url,
@@ -1917,7 +2961,7 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                                     continue
                             if score < 15 and not _looks_like_safe_cta(action.text or action.value, action.tag):
                                 _set_candidate_status(candidate_ledger, page.url, action, 'skipped_objective', 'Candidate did not match the objective strongly enough')
-                                publish_event(application_url, {
+                                publish_event(event_stream_key, {
                                     'type': 'candidate_skipped',
                                     'status': 'Skipped',
                                     'url': page.url,
@@ -1930,7 +2974,7 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                                 continue
                             target_url = _resolve_href(application_url, action.href) if action.href else page.url
                             if action.href and not _same_origin(application_url, target_url):
-                                publish_event(application_url, {
+                                publish_event(event_stream_key, {
                                     'type': 'candidate_skipped',
                                     'status': 'Skipped',
                                     'url': page.url,
@@ -1941,7 +2985,7 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                                     'reason': 'External link skipped to keep the crawl inside the application boundary.',
                                 })
                                 continue
-                            publish_event(application_url, {
+                            publish_event(event_stream_key, {
                                 'type': 'target_selected',
                                 'status': 'Target selected',
                                 'url': page.url,
@@ -1955,10 +2999,10 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                                 'current_target': current_objective_target,
                                 'expected_destination': target_url,
                             })
-                            publish_event(application_url, {'type': 'clicking', 'status': 'Clicking', 'url': page.url, 'title': current_title, 'element': action.text or action.value or action.href, 'tag': action.tag, 'selector': action.selector, 'score': score, 'current_target': current_objective_target})
+                            publish_event(event_stream_key, {'type': 'clicking', 'status': 'Clicking', 'url': page.url, 'title': current_title, 'element': action.text or action.value or action.href, 'tag': action.tag, 'selector': action.selector, 'score': score, 'current_target': current_objective_target})
                             _set_candidate_status(candidate_ledger, page.url, action, 'attempted', 'Agent selected this control')
                             before_click_url = page.url
-                            observed = _execute_observation_click(page, action, sequence, page.url, application_url, objective, live_preview=using_live_browser)
+                            observed = _execute_observation_click(page, action, sequence, page.url, event_stream_key, objective, live_preview=using_live_browser)
                             if observed is not None:
                                 click_failed = any(word in str(observed.resulted_in or '').lower() for word in ('failed', 'error', 'timeout', 'blocked'))
                                 _set_candidate_status(candidate_ledger, before_click_url, action, 'failed' if click_failed else 'succeeded', observed.resulted_in or 'Click observed')
@@ -1999,15 +3043,26 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                                             'resulted_in': 'new_page',
                                         })
                                 interactions.append(observed)
+                                if (
+                                    scoped_navigation
+                                    and _normalize_match_text(current_objective_target) != _normalize_match_text(parent_target_label)
+                                    and not click_failed
+                                ):
+                                    completed_child_labels.add(_normalize_match_text(current_objective_target))
                                 sequence += 1
                                 performed_clicks += 1
                                 clicked_this_round = True
                                 current_url = page.url
-                                current_title = _derive_page_name(page.url, page.title())
                                 try:
                                     next_signals = _extract_page_signals(page)
                                     signals = next_signals
-                                    publish_event(application_url, {
+                                    current_title = _derive_page_name(
+                                        page.url,
+                                        next_signals.get('title') or page.title(),
+                                        next_signals.get('headings'),
+                                        next_signals.get('primaryHeading'),
+                                    )
+                                    publish_event(event_stream_key, {
                                         'type': 'page_scanned',
                                         'status': 'Inspecting DOM',
                                         'url': page.url,
@@ -2026,20 +3081,38 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                                     })
                                 except Exception as exc:
                                     next_signals = signals
-                                    publish_event(application_url, {'type': 'page_scan_failed', 'status': 'Scan failed', 'url': page.url, 'title': current_title, 'result': f'{type(exc).__name__}: {exc}'})
+                                    publish_event(event_stream_key, {'type': 'page_scan_failed', 'status': 'Scan failed', 'url': page.url, 'title': current_title, 'result': f'{type(exc).__name__}: {exc}'})
                                 if observed.destination_url and observed.destination_url != before_click_url:
                                     transition_interactions = [_build_interaction(sequence_id=sequence, interaction_number=1, page_url=observed.destination_url, element_type='page', element_label=current_title, selector=observed.destination_url, action='open', value=None, state_before='navigation', state_after='loaded', resulted_in=f'navigated_from: {before_click_url}', wait_condition='domcontentloaded', parent_component='browser_navigation', screenshot_after=observed.screenshot_after, dom_snapshot_after=observed.dom_snapshot_after, replay={'action': 'open', 'selector': observed.destination_url, 'source_url': before_click_url})]
                                     sequence += 1
                                     steps.append(_page_to_step(len(steps) + 1, depth + performed_clicks, observed.destination_url, current_title, next_signals, transition_interactions))
                                     # Queue the destination so the next page is scanned and its clicks are captured.
-                                    if observed.destination_url not in visited and len(visited) + len(queue) < max_pages:
-                                        queue.append((observed.destination_url, depth + 1, min(current_target_index + 1, len(objective_targets))))
+                                    next_target_index = min(current_target_index + 1, len(objective_targets))
+                                    if parent_child_scope:
+                                        # Continue a multi-level hierarchy on
+                                        # the destination. For a two-level path
+                                        # next_target_index already equals the
+                                        # target count, making it evidence-only.
+                                        if len(visited_states) + len(queue) < state_budget:
+                                            queue.append((observed.destination_url, depth + 1, next_target_index))
+                                    elif structured_submenu or dynamic_submenu_inventory:
+                                        for task in _collection_resume_tasks(
+                                            observed.destination_url,
+                                            application_url,
+                                            depth,
+                                            next_target_index,
+                                            len(objective_targets),
+                                        ):
+                                            if task not in queue and (task[0], task[2]) not in visited_states:
+                                                queue.append(task)
+                                    elif observed.destination_url not in visited and len(visited) + len(queue) < max_pages:
+                                        queue.append((observed.destination_url, depth + 1, next_target_index))
                                 current_target_index = min(current_target_index + 1, len(objective_targets))
                             break
                         if not clicked_this_round:
                             break
                         if objective_targets and current_target_index >= len(objective_targets):
-                            publish_event(application_url, {
+                            publish_event(event_stream_key, {
                                 'type': 'objective_completed',
                                 'status': 'Objective path completed',
                                 'url': page.url,
@@ -2049,7 +3122,7 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
                             break
                 final_remaining = max(0, min_events - sequence + 1)
                 if final_remaining > 0:
-                    final_inventory, sequence = _build_inventory_interactions(_extract_clickable_actions(page), sequence, page.url, final_remaining, application_url, _capture_dom_snapshot(page), _capture_viewport_screenshot(page, f'page_{sequence}_final_inventory'))
+                    final_inventory, sequence = _build_inventory_interactions(_extract_clickable_actions(page), sequence, page.url, final_remaining, event_stream_key, _capture_dom_snapshot(page), _capture_viewport_screenshot(page, f'page_{sequence}_final_inventory'))
                     interactions.extend(final_inventory)
                 steps.append(_page_to_step(len(steps) + 1, depth, page.url, current_title, signals, interactions))
         finally:
@@ -2057,13 +3130,24 @@ def _crawl_with_playwright(application_url: str, parameters: dict[str, str], max
             if not using_live_browser:
                 browser.close()
 
-    publish_event(application_url, {'type': 'status', 'status': 'Completed', 'url': steps[-1].page_url if steps else application_url, 'step_count': len(steps), 'event_count': sum(len(step.interactions) for step in steps)})
+    publish_event(event_stream_key, {'type': 'status', 'status': 'Completed', 'url': steps[-1].page_url if steps else application_url, 'step_count': len(steps), 'event_count': sum(len(step.interactions) for step in steps)})
 
-    return steps, reasoning_bits, {'candidate_ledger': list(candidate_ledger.values()), 'crawl_limits': {'max_depth': max_depth, 'max_pages': max_pages, 'min_events': min_events, 'follow_links': follow_links}}
+    return steps, reasoning_bits, {
+        'candidate_ledger': list(candidate_ledger.values()),
+        'crawl_limits': {'max_depth': max_depth, 'max_pages': max_pages, 'requested_max_pages': requested_max_pages, 'min_events': min_events, 'follow_links': follow_links},
+        'objective_execution': {
+            'scoped_navigation': scoped_navigation,
+            'plan': [step.__dict__ for step in execution_plan],
+            'planned_targets': list(planned_objective_targets),
+            'required_children': sorted(required_child_labels),
+            'completed_children': sorted(completed_child_labels),
+            'captured_destination_urls': sorted(captured_destination_urls),
+        },
+    }
 
 
 def _build_browser_use_result(result_text: str, application_url: str, runtime: dict[str, object], steps: list[JourneyStep], crawl_reasoning: list[str], objective: str) -> ExplorationResult:
-    title = _derive_page_name(application_url)
+    title = next((step.page_title for step in steps if _safe_text(step.page_title)), _derive_page_name(application_url))
     reasoning = ' | '.join(([result_text[:4000]] if result_text else []) + crawl_reasoning)
     journey = JourneyRecord(
         journey_id=str(uuid4()),
@@ -2176,7 +3260,33 @@ def _normalise_crawl_settings(crawl_settings: dict[str, object] | None) -> tuple
     else:
         follow_links = bool(follow_links)
     return max_depth, max_pages, follow_links, min_events
+
+
+def _validate_objective_input(objective: str) -> str:
+    cleaned = str(objective or '').strip()
+    if not cleaned:
+        raise ValueError('A single non-empty journey objective is required.')
+    if len(re.findall(r'\bstarting\s+from\b', cleaned, flags=re.I)) > 1:
+        raise ValueError('The journey objective contains multiple objectives. Submit one clean objective per exploration.')
+    return cleaned
+
+
+def _objective_requires_deterministic_navigation(objective: str) -> bool:
+    """Keep strict parent/child objectives on the DOM-constrained executor."""
+    normalized = _normalize_match_text(objective)
+    if 'under' not in normalized:
+        return False
+    if _objective_requests_submenu_inventory(objective):
+        return True
+    return len(_objective_targets(objective)) > 1
+
+
 def explore_application(application_url: str, parameters: dict[str, str], crawl_settings: dict[str, object] | None = None, objective: str = "Discover the primary user journey from the application home page.") -> ExplorationResult:
+    objective = _validate_objective_input(objective)
+    # Compile the immutable navigation contract before any MCP, LLM-agent, or
+    # Playwright browser activity begins. All later target selection is derived
+    # from this plan.
+    execution_plan = _compile_journey_execution_plan(objective)
     max_depth, max_pages, follow_links, min_events = _normalise_crawl_settings(crawl_settings)
     runtime = _runtime_browser_config()
     runtime['min_events'] = min_events
@@ -2204,26 +3314,50 @@ def explore_application(application_url: str, parameters: dict[str, str], crawl_
             mcp_result = explore_with_mcp(application_url, str(runtime.get('playwright_mcp_command', 'npx')), runtime.get('playwright_mcp_args') or ['-y', '@playwright/mcp@latest'])
         except Exception as exc:
             mcp_error = f'{type(exc).__name__}: {exc}'
-    if runtime['browser_use_enabled'] and _browser_use_available():
+    deterministic_navigation = _objective_requires_deterministic_navigation(objective)
+    if runtime['browser_use_enabled'] and _browser_use_available() and not deterministic_navigation:
         try:
             task = get_browser_agent_profile(application_url, objective)
-            browser_use_result = _browser_use_to_journey(task, application_url, runtime, parameters, max_depth, max_pages, follow_links, objective)
+            browser_use_result = _browser_use_to_journey(task, application_url, runtime, parameters, max_depth, max_pages, follow_links, objective, stream_key=journey_id)
         except Exception as exc:
             browser_use_error = f'{type(exc).__name__}: {exc}'
             browser_use_result = None
+    elif deterministic_navigation:
+        publish_event(
+            application_url,
+            {
+                'type': 'llm_agent_bypassed',
+                'status': 'Strict objective uses DOM-constrained navigation',
+                'url': application_url,
+                'objective': objective,
+                'reason': 'Parent and child submenu objectives must not be delegated to unconstrained exploratory clicking.',
+            },
+        )
 
     try:
         # Browser-use supplies goal reasoning, while Playwright owns the connected
         # page and records the observable click, navigation, and DOM evidence.
-        captured_steps, captured_reasoning, capture_business = _crawl_with_playwright(
-            application_url,
-            parameters,
-            max_depth=max_depth,
-            max_pages=max_pages,
-            follow_links=follow_links,
-            objective=objective,
-            min_events=min_events,
-        )
+        if browser_use_result is not None:
+            # Browser-use already completed one Playwright evidence crawl.
+            # Reuse it instead of replaying the same journey a second time.
+            captured_steps = browser_use_result.journeys[0].steps
+            captured_reasoning = []
+            capture_business = {
+                'candidate_ledger': browser_use_result.journeys[0].test_hints.get('candidate_ledger', []),
+                'crawl_limits': browser_use_result.journeys[0].test_hints.get('crawl_limits', {}),
+            }
+        else:
+            captured_steps, captured_reasoning, capture_business = _crawl_with_playwright(
+                application_url,
+                parameters,
+                max_depth=max_depth,
+                max_pages=max_pages,
+                follow_links=follow_links,
+                objective=objective,
+                min_events=min_events,
+                stream_key=journey_id,
+                execution_plan=execution_plan,
+            )
         if not isinstance(capture_business, dict):
             capture_business = {}
         steps = captured_steps
@@ -2235,6 +3369,41 @@ def explore_application(application_url: str, parameters: dict[str, str], crawl_
         else:
             outcome = 'Exploration Complete'
             outcome_detail = 'Journey discovered successfully from the base URL.'
+            objective_text = _normalize_match_text(objective)
+            objective_requires_execution = bool(_objective_targets(objective)) and 'discover the primary user journey from the application home page' not in objective_text
+            objective_interactions = [
+                interaction
+                for step in steps
+                for interaction in step.interactions
+                if interaction.action in {'hover', 'click', 'select', 'activate'}
+            ]
+            execution = capture_business.get('objective_execution', {}) if isinstance(capture_business, dict) else {}
+            required_children = set(execution.get('required_children', []) or []) if isinstance(execution, dict) else set()
+            completed_children = set(execution.get('completed_children', []) or []) if isinstance(execution, dict) else set()
+            missing_children = sorted(required_children - completed_children)
+            if objective_requires_execution and not objective_interactions:
+                outcome = 'Exploration Blocked'
+                outcome_detail = 'The objective produced no hover, click, select, or activation event; only landing-page inspection was captured.'
+            elif execution.get('scoped_navigation') and not required_children:
+                outcome = 'Exploration Blocked'
+                outcome_detail = 'The requested parent scope was reached, but no verified child controls were discovered. Exploration stopped without using unrelated links.'
+            elif execution.get('scoped_navigation') and missing_children and _authentication_gate_detected(steps, application_url):
+                outcome = 'Human Input Required'
+                outcome_detail = (
+                    'The requested account destination was reached, but authentication is required before the remaining '
+                    f"controls can be explored: {', '.join(missing_children)}. Sign in and run the journey again."
+                )
+            elif execution.get('scoped_navigation') and missing_children:
+                outcome = 'Exploration Blocked'
+                outcome_detail = f"Scoped exploration did not complete the required child controls: {', '.join(missing_children)}. Unrelated links were not used as fallbacks."
+            elif objective_requires_execution and _objective_has_structured_submenu(objective):
+                destination_pages = [
+                    step for step in steps
+                    if step.page_url.rstrip('/') != application_url.rstrip('/')
+                ]
+                if not destination_pages:
+                    outcome = 'Exploration Blocked'
+                    outcome_detail = 'The submenu objective was parsed, but no destination page was captured after the menu interaction.'
         if mcp_result:
             reasoning_bits.insert(0, 'Playwright MCP capture completed and snapshot captured.')
         fallback = False
@@ -2265,7 +3434,7 @@ def explore_application(application_url: str, parameters: dict[str, str], crawl_
     steps = _enrich_capture_identity(steps, journey_id)
     metadata.exploration_id = 'EXP-' + hashlib.sha1(f'{application_url}:{metadata.exploration_timestamp}'.encode('utf-8')).hexdigest()[:12]
     total_depth = max((step.depth_level for step in steps), default=0)
-    title = _derive_page_name(application_url)
+    title = next((step.page_title for step in steps if _safe_text(step.page_title)), _derive_page_name(application_url))
     if fallback:
         title = f'{title} - Discovered from base URL'
     reasoning = ' | '.join(reasoning_bits) if reasoning_bits else f'Captured {len(steps)} steps from the base URL.'
@@ -2293,9 +3462,10 @@ def explore_application(application_url: str, parameters: dict[str, str], crawl_
             'playwright_mcp_error': mcp_error,
             'playwright_error': playwright_error,
             'playwright_mcp_snapshot_captured': bool(mcp_result and mcp_result.get('snapshot')),
-            'capture_source': ('browser_use+playwright' if browser_use_result else ('url_fallback' if outcome == 'Exploration Blocked' else ('html_fallback' if fallback else 'playwright'))),
+            'capture_source': ('browser_use+playwright' if browser_use_result else ('html_fallback' if fallback else 'playwright')),
             'journey_objective': objective,
-            'objective_targets': _objective_targets(objective),
+            'objective_targets': capture_business.get('objective_execution', {}).get('planned_targets', _objective_targets(objective)),
+            'objective_execution': capture_business.get('objective_execution', {}),
             'minimum_events_requested': min_events,
             'candidate_ledger': capture_business.get('candidate_ledger', []),
             'crawl_limits': capture_business.get('crawl_limits', {
@@ -2311,6 +3481,7 @@ def explore_application(application_url: str, parameters: dict[str, str], crawl_
             'test_tags': ['browser_agent', 'journey', 'discovery'],
             'data_dependencies': [],
             'exploration_id': metadata.exploration_id,
+            'live_stream_key': journey_id,
             'page_ids': [interaction.page_id for step in steps for interaction in step.interactions if interaction.page_id],
             'event_ids': [interaction.event_id for step in steps for interaction in step.interactions if interaction.event_id],
         },
@@ -2322,20 +3493,3 @@ def explore_application(application_url: str, parameters: dict[str, str], crawl_
     exploration = ExplorationResult(exploration_metadata=metadata, journeys=[journey])
     _persist_browser_run_artifacts(exploration, runtime)
     return exploration
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

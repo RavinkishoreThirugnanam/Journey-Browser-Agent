@@ -114,6 +114,7 @@ class JourneyDetailResponse(BaseModel):
     events: list[Interaction] = Field(default_factory=list)
     exploration_metadata: ExplorationMetadata = Field(default_factory=ExplorationMetadata)
     summary: str = ''
+    event_count: int = 0
 
 
 class JourneyVisualizeRequest(BaseModel):

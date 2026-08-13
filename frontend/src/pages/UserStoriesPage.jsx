@@ -12,12 +12,27 @@ function EmptyState({ title, description }) {
   )
 }
 
+function jiraRefreshLabel(story) {
+  const status = String(story?.jira_sync_status || '').toLowerCase()
+  if (status === 'updated_from_jira') return 'Updated from Jira'
+  if (status === 'up_to_date') return 'Up to date'
+  if (status === 'refresh_failed') return 'Refresh failed'
+  if (status === 'synced') return 'Created in Jira'
+  return 'Local'
+}
+
+function jiraRefreshTime(story) {
+  if (!story?.jira_last_refreshed_at) return ''
+  const value = new Date(story.jira_last_refreshed_at)
+  return Number.isNaN(value.getTime()) ? '' : 'Refreshed ' + value.toLocaleString()
+}
 export function UserStoriesPage() {
   const { data, loading, refetch } = useFetch(api.getUserStories, [])
   const items = data?.items ?? []
   const [journeys, setJourneys] = useState([])
   const [selectedJourneys, setSelectedJourneys] = useState([])
   const [generating, setGenerating] = useState(false)
+  const [refreshingJira, setRefreshingJira] = useState(false)
   const [deletingStoryId, setDeletingStoryId] = useState('')
   const [message, setMessage] = useState('')
   const [journeyPickerValue, setJourneyPickerValue] = useState('')
@@ -45,6 +60,7 @@ export function UserStoriesPage() {
   const selectedJourneySet = new Set(selectedJourneys)
   const selectedJourneyItems = useMemo(() => journeys.filter((journey) => selectedJourneySet.has(journey.journey_id)), [journeys, selectedJourneys])
   const selectedStories = useMemo(() => items.filter((story) => selectedJourneySet.has(story.journey_id)), [items, selectedJourneys])
+  const jiraLinkedSelectedStories = useMemo(() => selectedStories.filter((story) => story.jira_key), [selectedStories])
   const selectedStoriesByJourney = useMemo(() => {
     return selectedJourneyItems.reduce((acc, journey) => {
       acc[journey.journey_id] = storiesByJourney[journey.journey_id] ?? []
@@ -65,6 +81,10 @@ export function UserStoriesPage() {
   const addJourneyFromDropdown = (event) => {
     const journeyId = event.target.value
     if (!journeyId) return
+    if (journeyId === '__all__') {
+      selectAllJourneys()
+      return
+    }
     setSelectedJourneys((current) => (current.includes(journeyId) ? current : [...current, journeyId]))
     setJourneyPickerValue('')
   }
@@ -74,7 +94,7 @@ export function UserStoriesPage() {
     if (journeyPickerValue === journeyId) setJourneyPickerValue('')
   }
 
-  const getJourneyLabel = (journey) => journey?.journey_title || journey?.source_url || journey?.application_url || journey?.journey_id || 'Journey map'
+  const getJourneyLabel = (journey) => journey?.journey_title || journey?.source_url || journey?.application_url || 'Journey map'
   const generationSourceLabel = (story) => {
     const source = String(story?.generation_source || '').toLowerCase()
     if (source === 'openai') return story?.generation_model ? 'OpenAI - ' + story.generation_model : 'OpenAI'
@@ -88,6 +108,28 @@ export function UserStoriesPage() {
     return 'neutral'
   }
 
+  const refreshStoriesFromJira = async () => {
+    const storyIds = jiraLinkedSelectedStories.map((story) => story.story_id).filter(Boolean)
+    if (!storyIds.length) {
+      setMessage('No Jira-linked stories are available in the selected journeys.')
+      return
+    }
+    setRefreshingJira(true)
+    setMessage('')
+    try {
+      const result = await api.refreshUserStoriesFromJira({ story_ids: storyIds })
+      await refetch()
+      if (result?.failed) {
+        setMessage('Updated ' + (result.updated ?? 0) + ' stories from Jira, but ' + result.failed + ' refreshes failed.')
+      } else {
+        setMessage('Jira refresh completed: ' + (result?.updated ?? 0) + ' updated and ' + (result?.unchanged ?? 0) + ' already current.')
+      }
+    } catch (error) {
+      setMessage(error?.message || 'Unable to refresh user stories from Jira.')
+    } finally {
+      setRefreshingJira(false)
+    }
+  }
   const deleteStory = async (storyId) => {
     if (!storyId) return
     setMessage('')
@@ -172,6 +214,7 @@ export function UserStoriesPage() {
               <span>Add journey context</span>
               <select value={journeyPickerValue} onChange={addJourneyFromDropdown} disabled={!journeys.length || !availableJourneyCount}>
                 <option value="">{journeys.length ? availableJourneyCount ? 'Choose a journey map' : 'All journey maps selected' : 'No journey maps available'}</option>
+                <option value="__all__" disabled={!availableJourneyCount}>Select all journey maps</option>
                 {nestedJourneys.map((journey) => (
                   <option key={journey.journey_id} value={journey.journey_id} disabled={selectedJourneySet.has(journey.journey_id)}>
                     {getJourneyLabel(journey)}
@@ -180,7 +223,6 @@ export function UserStoriesPage() {
               </select>
             </label>
             <div className="workflow-minimal-actions">
-              <button type="button" className="secondary-button" onClick={selectAllJourneys} disabled={!journeys.length || !availableJourneyCount}>Select all</button>
               <button type="button" className="secondary-button" onClick={clearSelection} disabled={!selectedJourneys.length}>Clear</button>
               <button type="button" onClick={generateStories} disabled={generating || loading || !selectedJourneys.length}>
                 {generating ? 'Generating...' : 'Generate User Stories'}
@@ -208,7 +250,17 @@ export function UserStoriesPage() {
                 <h3>Generated user stories</h3>
                 <p>All stories from the selected journeys are shown together. Journey and generation context remain visible on every row.</p>
               </div>
-              <Badge tone={selectedStories.length ? 'success' : 'neutral'}>{selectedStories.length} stories</Badge>
+              <div className="workflow-minimal-heading-actions">
+                <Badge tone={selectedStories.length ? 'success' : 'neutral'}>{selectedStories.length} stories</Badge>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={refreshStoriesFromJira}
+                  disabled={refreshingJira || !jiraLinkedSelectedStories.length}
+                >
+                  {refreshingJira ? 'Refreshing Jira...' : 'Refresh from Jira'}
+                </button>
+              </div>
             </div>
 
             {selectedStories.length ? (
@@ -218,14 +270,18 @@ export function UserStoriesPage() {
                   const journey = journeys.find((candidate) => candidate.journey_id === item.journey_id)
                   return (
                     <tr key={item.story_id}>
-                      <td><strong>{item.summary}</strong><small>{item.story_id}</small></td>
-                      <td><strong>{getJourneyLabel(journey)}</strong><small>{item.journey_id}</small></td>
+                      <td><strong>{item.summary}</strong></td>
+                      <td><strong>{getJourneyLabel(journey)}</strong></td>
                       <td><Badge tone={generationSourceTone(item)}>{generationSourceLabel(item)}</Badge></td>
                       <td>{item.epic || '-'}</td>
                       <td><strong>{item.module || '-'}</strong><small>{item.component || '-'}</small></td>
                       <td>
                         {item.jira_url ? (
-                          <a className="jira-story-link" href={item.jira_url} target="_blank" rel="noreferrer">{item.jira_key || 'Open in Jira'}</a>
+                          <div className="jira-story-state">
+                            <a className="jira-story-link" href={item.jira_url} target="_blank" rel="noreferrer">{item.jira_key || 'Open in Jira'}</a>
+                            <small>{jiraRefreshLabel(item)}</small>
+                            {jiraRefreshTime(item) && <small>{jiraRefreshTime(item)}</small>}
+                          </div>
                         ) : <Badge tone="neutral">Local</Badge>}
                       </td>
                       <td>

@@ -76,13 +76,17 @@ export function TestScriptsPage() {
     }, {})
   }, [scriptsForSelection])
 
-  const getJourneyLabel = (journey) => journey?.journey_title || journey?.source_url || journey?.application_url || journey?.journey_id || 'Journey map'
-  const getStoryLabel = (story) => story?.summary || story?.title || story?.story_id || 'User story'
-  const getTestCaseLabel = (testCase) => testCase?.title || testCase?.test_case_title || testCase?.test_case_id || 'Test case'
+  const getJourneyLabel = (journey) => journey?.journey_title || journey?.source_url || journey?.application_url || 'Journey map'
+  const getStoryLabel = (story) => story?.summary || story?.title || 'User story'
+  const getTestCaseLabel = (testCase) => testCase?.title || testCase?.test_case_title || 'Test case'
 
   const addJourneyFromDropdown = (event) => {
     const journeyId = event.target.value
     if (!journeyId) return
+    if (journeyId === '__all__') {
+      selectAllJourneys()
+      return
+    }
     setSelectedJourneys((current) => (current.includes(journeyId) ? current : [...current, journeyId]))
     setJourneyPickerValue('')
   }
@@ -90,6 +94,10 @@ export function TestScriptsPage() {
   const addStoryFromDropdown = (event) => {
     const storyId = event.target.value
     if (!storyId) return
+    if (storyId === '__all__') {
+      selectAllStories()
+      return
+    }
     setSelectedStories((current) => (current.includes(storyId) ? current : [...current, storyId]))
     setStoryPickerValue('')
   }
@@ -97,6 +105,10 @@ export function TestScriptsPage() {
   const addTestCaseFromDropdown = (event) => {
     const testCaseId = event.target.value
     if (!testCaseId) return
+    if (testCaseId === '__all__') {
+      selectAllTestCases()
+      return
+    }
     setSelectedTestCases((current) => (current.includes(testCaseId) ? current : [...current, testCaseId]))
     setTestCasePickerValue('')
   }
@@ -197,6 +209,7 @@ export function TestScriptsPage() {
               <span>1. Journey context</span>
               <select value={journeyPickerValue} onChange={addJourneyFromDropdown} disabled={!journeys.length || !availableJourneyCount}>
                 <option value="">{journeys.length ? availableJourneyCount ? 'Choose a journey map' : 'All journey maps selected' : 'No journey maps available'}</option>
+                <option value="__all__" disabled={!availableJourneyCount}>Select all journey maps</option>
                 {journeys.map((journey) => (
                   <option key={journey.journey_id} value={journey.journey_id} disabled={selectedJourneySet.has(journey.journey_id)}>{getJourneyLabel(journey)}</option>
                 ))}
@@ -207,6 +220,7 @@ export function TestScriptsPage() {
               <span>2. User stories</span>
               <select value={storyPickerValue} onChange={addStoryFromDropdown} disabled={!availableStoryItems.length || !availableStoryCount}>
                 <option value="">{selectedJourneys.length ? availableStoryCount ? 'Choose a user story' : 'All available stories selected' : 'Select journey context first'}</option>
+                <option value="__all__" disabled={!availableStoryCount}>Select all available stories</option>
                 {availableStoryItems.map((story) => (
                   <option key={story.story_id} value={story.story_id} disabled={selectedStorySet.has(story.story_id)}>{getStoryLabel(story)}</option>
                 ))}
@@ -217,6 +231,7 @@ export function TestScriptsPage() {
               <span>3. Test cases</span>
               <select value={testCasePickerValue} onChange={addTestCaseFromDropdown} disabled={!availableTestCaseItems.length || !availableTestCaseCount}>
                 <option value="">{selectedStories.length ? availableTestCaseCount ? 'Choose a test case' : 'All available cases selected' : 'Select user stories first'}</option>
+                <option value="__all__" disabled={!availableTestCaseCount}>Select all available test cases</option>
                 {availableTestCaseItems.map((testCase) => (
                   <option key={testCase.test_case_id} value={testCase.test_case_id} disabled={selectedTestCaseSet.has(testCase.test_case_id)}>{getTestCaseLabel(testCase)}</option>
                 ))}
@@ -225,9 +240,6 @@ export function TestScriptsPage() {
           </div>
 
           <div className="workflow-minimal-actions script-minimal-quick-actions">
-            <button type="button" className="secondary-button" onClick={selectAllJourneys} disabled={!journeys.length || !availableJourneyCount}>All journeys</button>
-            <button type="button" className="secondary-button" onClick={selectAllStories} disabled={!availableStoryItems.length || !availableStoryCount}>All stories</button>
-            <button type="button" className="secondary-button" onClick={selectAllTestCases} disabled={!availableTestCaseItems.length || !availableTestCaseCount}>All test cases</button>
             <button type="button" className="secondary-button" onClick={clearAll} disabled={!selectedJourneys.length && !selectedStories.length && !selectedTestCases.length}>Clear</button>
           </div>
 
@@ -265,7 +277,6 @@ export function TestScriptsPage() {
             </div>
             <div className="workflow-minimal-actions">
               <Badge tone={selectedTestCases.length ? 'success' : 'neutral'}>{selectedTestCases.length} selected</Badge>
-              <button type="button" onClick={generate} disabled={generating || loading || !selectedTestCases.length}>{generating ? 'Generating...' : 'Generate Test Scripts'}</button>
             </div>
           </div>
 
@@ -278,7 +289,6 @@ export function TestScriptsPage() {
                     <input type="checkbox" checked={selectedTestCaseSet.has(testCase.test_case_id)} onChange={() => selectedTestCaseSet.has(testCase.test_case_id) ? removeTestCase(testCase.test_case_id) : setSelectedTestCases((current) => [...current, testCase.test_case_id])} />
                     <div>
                       <strong>{getTestCaseLabel(testCase)}</strong>
-                      <small>{testCase.test_case_id}</small>
                     </div>
                     <span>{getStoryLabel(story)}</span>
                     <Badge tone="neutral">{testCase.test_case_type || 'Functional'}</Badge>
@@ -292,6 +302,9 @@ export function TestScriptsPage() {
               <span>{selectedStories.length ? 'Generate test cases in Step 3, then return here.' : 'Use the ordered selectors above to narrow the available sources.'}</span>
             </div>
           )}
+          <div className="script-minimal-bottom-actions">
+            <button type="button" onClick={generate} disabled={generating || loading || !selectedTestCases.length}>{generating ? 'Generating...' : 'Generate Test Scripts'}</button>
+          </div>
         </div>
 
         <div className="workflow-minimal-workspace">
@@ -311,8 +324,8 @@ export function TestScriptsPage() {
                 const evidenceCount = Number(item.source_evidence_count || 0)
                 return (
                   <tr key={item.script_id}>
-                    <td><strong>{item.script_id}</strong></td>
-                    <td><strong>{getTestCaseLabel(testCase)}</strong><small>{item.test_case_id}</small></td>
+                    <td><strong>Generated script</strong></td>
+                    <td><strong>{getTestCaseLabel(testCase)}</strong></td>
                     <td><Badge tone={evidenceCount ? "success" : "warning"}>{evidenceCount ? `${evidenceCount} linked observations` : "Evidence unavailable"}</Badge></td>
                     <td>
                       <div className="table-actions script-artifact-actions">

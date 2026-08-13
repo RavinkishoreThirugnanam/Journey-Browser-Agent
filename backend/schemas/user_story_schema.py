@@ -20,9 +20,12 @@ class Story(BaseModel):
     acceptance_criteria: list[AcceptanceCriterion] = Field(default_factory=list)
     labels: list[str] = Field(default_factory=list)
     component: str = 'Browser Agent'
-    jira_key: str = ""
-    jira_url: str = ""
-    jira_sync_status: str = "local"
+    jira_key: str = ''
+    jira_url: str = ''
+    jira_sync_status: str = 'local'
+    jira_updated_at: str = ''
+    jira_last_refreshed_at: str = ''
+    jira_sync_error: str = ''
 
 
 class StoryBundle(BaseModel):

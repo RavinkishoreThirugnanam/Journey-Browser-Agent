@@ -224,6 +224,45 @@ def generate_json_with_openai(system_prompt: str, user_payload: dict[str, Any], 
         raise LLMGenerationError(f"OpenAI response was not valid JSON: {exc}") from exc
 
 
+def generate_text_with_llm(system_prompt: str, user_payload: Any, *, timeout: int = 90, runtime_config: LLMRuntimeConfig | None = None) -> str:
+    """Generate plain text for transformations such as Mermaid diagrams."""
+    runtime = runtime_config or get_llm_runtime_config()
+    if not runtime.enabled:
+        raise LLMGenerationError("LLM generation is not configured.")
+
+    source = _bounded_json(user_payload)
+    if runtime.provider.lower() in {"google gemini", "gemini", "google"}:
+        endpoint = runtime.api_endpoint.rstrip("/")
+        if endpoint.endswith("/v1/chat/completions"):
+            endpoint = "https://generativelanguage.googleapis.com/v1beta"
+        if not endpoint.endswith("/v1beta"):
+            endpoint += "/v1beta"
+        response = requests.post(
+            f"{endpoint}/models/{runtime.model}:generateContent",
+            params={"key": runtime.auth_token},
+            headers={"Content-Type": "application/json"},
+            json={"contents": [{"role": "user", "parts": [{"text": system_prompt[:MAX_SYSTEM_PROMPT_CHARS] + "\n\nINPUT:\n" + source}]}],
+                  "generationConfig": {"temperature": runtime.temperature, "maxOutputTokens": MAX_OUTPUT_TOKENS}},
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        return str(response.json()["candidates"][0]["content"]["parts"][0]["text"])
+
+    response = requests.post(
+        runtime.api_endpoint,
+        headers={"Authorization": f"Bearer {runtime.auth_token}", "Content-Type": "application/json"},
+        json={"model": runtime.model, "temperature": runtime.temperature, "max_tokens": MAX_OUTPUT_TOKENS,
+              "messages": [{"role": "system", "content": system_prompt[:MAX_SYSTEM_PROMPT_CHARS]},
+                           {"role": "user", "content": source}]},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    content = response.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+    if not content:
+        raise LLMGenerationError("LLM returned an empty response.")
+    return str(content)
+
+
 
 
 

@@ -60,18 +60,5 @@
     "user_story_id": "83acc1e6-38e6-432f-a5c5-0378eb5af7ca",
     "journey_objective": "Discover the primary user journey from the application home page.",
     "source_evidence_count": 1
-  },
-  {
-    "script_id": "41db42ea-35a8-49c0-9fd8-5eb7c788089c",
-    "test_case_id": "f0e5904e-adc5-4fc2-8161-fbe663a99a89",
-    "generated_at": "2026-07-31T09:30:46.749262+00:00",
-    "feature_file": "Feature: Validate Navigation to Special Offers\n  As a user, I want to view special offers on the Disneyworld website so that I can explore available deals and discounts.\n\n  Scenario: Navigate to Special Offers\n    Given the user starts from \"https://disneyworld.disney.go.com/\"\n    When the user hovers over the \"Tickets & Parks\" item in the main navigation\n    And the user clicks on the \"View Special Offers\" link\n    Then the user should be navigated to the Special Offers page\n    And the page title should be \"Special Offers, Deals & Discounts | Walt Disney World Resort\"",
-    "javascript_file": "const { Given, When, Then } = require('@cucumber/cucumber');\nconst { expect } = require('chai');\n\nGiven('the user starts from {string}', async function (url) {\n    await this.page.goto(url, { waitUntil: 'domcontentloaded' });\n});\n\nWhen('the user hovers over the {string} item in the main navigation', async function (menuItem) {\n    const selector = 'a[name=\"&lid=WDW_Header_ParksTickets_CategoryLink\"]'; // Review if selector is valid\n    await this.page.hover(selector);\n});\n\nWhen('the user clicks on the {string} link', async function (linkText) {\n    const selector = 'a[href=\"/special-offers/\"]'; // Review if selector is valid\n    await this.page.click(selector);\n    await this.page.waitForNavigation({ waitUntil: 'networkidle' });\n});\n\nThen('the user should be navigated to the Special Offers page', async function () {\n    const expectedUrl = 'https://disneyworld.disney.go.com/special-offers/';\n    expect(this.page.url()).to.equal(expectedUrl);\n});\n\nThen('the page title should be {string}', async function (expectedTitle) {\n    const title = await this.page.title();\n    expect(title).to.equal(expectedTitle);\n});",
-    "feature_filename": "validate_navigation_to_special_offers.feature",
-    "javascript_filename": "validate_navigation_to_special_offers.js",
-    "journey_id": "84fdd92e-07e5-4448-9397-3a575c9239c2",
-    "user_story_id": "7caa5d2e-1d43-4967-a3f2-e449a9a856f4",
-    "journey_objective": "Starting from https://disneyworld.disney.go.com/, hover over the Tickets & Parks item in the main navigation and click on 'View Special Offers'.",
-    "source_evidence_count": 13
   }
 ]

@@ -39,7 +39,7 @@ export function VisualizationPage() {
       setMermaidText(result.mermaid)
       setMessage('Mermaid diagram generated.')
     } catch {
-      setMessage('Select a valid journey ID to visualize.')
+      setMessage('Select a valid journey to visualize.')
     } finally {
       setLoading(false)
     }
@@ -52,7 +52,7 @@ export function VisualizationPage() {
           <select className="journey-select" value={journeyId} onChange={(e) => setJourneyId(e.target.value)}>
             <option value="">Select a journey</option>
             {journeyOptions.map((j) => (
-              <option key={j.journey_id} value={j.journey_id}>{j.journey_id}</option>
+              <option key={j.journey_id} value={j.journey_id}>{j.journey_title || j.source_url || j.application_url || 'Journey map'}</option>
             ))}
           </select>
         </Field>

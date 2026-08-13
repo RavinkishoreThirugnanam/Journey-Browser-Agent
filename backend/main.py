@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from core.logging import configure_logging
 from routers.configuration_router import router as configuration_router
+from routers.dashboard_router import router as dashboard_router
 from routers.exploration_router import router as exploration_router
 from routers.export_router import router as export_router
 from routers.journey_router import router as journey_router
@@ -34,6 +35,7 @@ app.include_router(journey_router, prefix="/api/v1", tags=["journeys"])
 app.include_router(live_browser_router, prefix="/api/v1", tags=["live-browser"])
 app.include_router(live_event_router, prefix="/api/v1", tags=["live-browser-events"])
 app.include_router(configuration_router, prefix="/api/v1", tags=["configuration"])
+app.include_router(dashboard_router, prefix="/api/v1", tags=["dashboard"])
 app.include_router(user_story_router, prefix="/api/v1", tags=["user-stories"])
 app.include_router(test_case_router, prefix="/api/v1", tags=["test-cases"])
 app.include_router(test_script_router, prefix="/api/v1", tags=["test-scripts"])

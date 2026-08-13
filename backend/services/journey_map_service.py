@@ -1,4 +1,11 @@
 import json
+import re
+from uuid import uuid4
+
+try:
+    import ijson
+except ImportError:  # pragma: no cover - compatibility for minimal local test environments
+    ijson = None
 
 from core.config import STORAGE_DIR
 from schemas.journey_schema import ExplorationResult, JourneyDetailResponse, JourneyRecord
@@ -6,6 +13,10 @@ from services.business_assurance_service import build_business_assurance
 
 
 JOURNEYS_FILE = STORAGE_DIR / 'journeys.json'
+JOURNEY_BUNDLES_DIR = STORAGE_DIR / 'journey_bundles'
+JOURNEY_RECORDS_DIR = STORAGE_DIR / 'journey_records'
+JOURNEYS_INDEX_FILE = STORAGE_DIR / 'journeys.index.json'
+JOURNEYS_INDEX_VERSION = 4
 USER_STORIES_FILE = STORAGE_DIR / 'user_stories.json'
 TEST_CASES_FILE = STORAGE_DIR / 'test_cases.json'
 TEST_SCRIPTS_FILE = STORAGE_DIR / 'test_scripts.json'
@@ -21,6 +32,29 @@ def _read_all() -> list[dict]:
 def _write_all(items: list[dict]) -> None:
     JOURNEYS_FILE.parent.mkdir(parents=True, exist_ok=True)
     JOURNEYS_FILE.write_text(json.dumps(items, indent=2), encoding='utf-8')
+    JOURNEYS_INDEX_FILE.unlink(missing_ok=True)
+
+
+def _iter_legacy_bundles():
+    if JOURNEYS_FILE.exists() and JOURNEYS_FILE.stat().st_size:
+        if ijson is not None:
+            with JOURNEYS_FILE.open('rb') as source:
+                yield from ijson.items(source, 'item')
+        else:
+            yield from _read_all()
+
+
+def _iter_all():
+    """Stream legacy bundles and then read newer file-per-run bundles."""
+    yield from _iter_legacy_bundles()
+    if JOURNEY_BUNDLES_DIR.exists():
+        for path in sorted(JOURNEY_BUNDLES_DIR.glob('*.json')):
+            try:
+                payload = json.loads(path.read_text(encoding='utf-8'))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(payload, dict):
+                yield payload
 
 
 def _read_json_file(path) -> list[dict]:
@@ -33,6 +67,22 @@ def _read_json_file(path) -> list[dict]:
 def _write_json_file(path, items: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(items, indent=2), encoding='utf-8')
+
+
+def _journey_record_path(journey_id: str):
+    safe_id = re.sub(r'[^A-Za-z0-9_.-]+', '_', str(journey_id or ''))
+    return JOURNEY_RECORDS_DIR / f'{safe_id}.json'
+
+
+def _write_journey_record(exploration: dict, journey: dict) -> None:
+    journey_id = str(journey.get('journey_id') or '')
+    if not journey_id:
+        return
+    JOURNEY_RECORDS_DIR.mkdir(parents=True, exist_ok=True)
+    _journey_record_path(journey_id).write_text(json.dumps({
+        'exploration_metadata': exploration.get('exploration_metadata', {}),
+        'journey': journey,
+    }, indent=2), encoding='utf-8')
 
 
 def _cascade_delete_for_journeys(journey_ids: set[str]) -> dict[str, int]:
@@ -154,16 +204,23 @@ def _normalize_journey(journey: dict, exploration: dict | None = None) -> dict:
 
 
 def save_journey(exploration: ExplorationResult | dict) -> ExplorationResult | dict:
-    items = _read_all()
     payload = exploration.model_dump() if hasattr(exploration, 'model_dump') else exploration
-    items.append(payload)
-    _write_all(items)
+    JOURNEY_BUNDLES_DIR.mkdir(parents=True, exist_ok=True)
+    metadata = payload.get('exploration_metadata', {}) if isinstance(payload, dict) else {}
+    bundle_id = str(metadata.get('exploration_id') or uuid4())
+    bundle_path = JOURNEY_BUNDLES_DIR / f'{bundle_id}.json'
+    bundle_path.write_text(json.dumps(payload, indent=2), encoding='utf-8')
+    if isinstance(payload, dict):
+        for journey in payload.get('journeys', []) or []:
+            if isinstance(journey, dict):
+                _write_journey_record(payload, journey)
+    JOURNEYS_INDEX_FILE.unlink(missing_ok=True)
     return exploration
 
 
 def _flatten_journeys() -> list[dict]:
     flattened: list[dict] = []
-    for exploration in _read_all():
+    for exploration in _iter_all():
         for journey in exploration.get('journeys', []) if isinstance(exploration, dict) else []:
             flattened.append(_normalize_journey(journey, exploration))
     return flattened
@@ -173,8 +230,60 @@ def list_journeys() -> list[dict]:
     return _flatten_journeys()
 
 
+def list_journey_summaries() -> list[dict]:
+    """Return list-page fields without sending large DOM and screenshot evidence."""
+    if JOURNEYS_INDEX_FILE.exists():
+        try:
+            cached = json.loads(JOURNEYS_INDEX_FILE.read_text(encoding='utf-8'))
+            if isinstance(cached, dict) and cached.get('version') == JOURNEYS_INDEX_VERSION and isinstance(cached.get('items'), list):
+                return cached['items']
+        except (OSError, json.JSONDecodeError):
+            pass
+    summaries: list[dict] = []
+    for exploration in _iter_all():
+        if not isinstance(exploration, dict):
+            continue
+        for journey in exploration.get('journeys', []) or []:
+            if not isinstance(journey, dict):
+                continue
+            _write_journey_record(exploration, journey)
+            metadata = journey.get('exploration_metadata') or _build_exploration_metadata(exploration, journey)
+            steps = journey.get('steps', []) or []
+            interaction_count = sum(
+                len(step.get('interactions', []) or [])
+                for step in steps
+                if isinstance(step, dict)
+            )
+            starting_url = journey.get('starting_url') or journey.get('application_url') or journey.get('source_url', '')
+            summaries.append({
+                'journey_id': journey.get('journey_id', ''),
+                'journey_title': journey.get('journey_title') or journey.get('starting_point') or starting_url,
+                'starting_point': journey.get('starting_point') or journey.get('journey_title') or starting_url,
+                'starting_url': starting_url,
+                'outcome': journey.get('outcome', ''),
+                'outcome_detail': journey.get('outcome_detail', ''),
+                'total_depth': journey.get('total_depth', len(steps)),
+                'exploration_metadata': metadata,
+                'app_url': metadata.get('app_url') or starting_url,
+                'step_count': len(steps),
+                'interaction_count': interaction_count,
+                'summary': journey.get('summary') or f"{len(steps)} steps captured from {starting_url}.",
+            })
+    _write_json_file(JOURNEYS_INDEX_FILE, {'version': JOURNEYS_INDEX_VERSION, 'items': summaries})
+    return summaries
+
+
 def get_journey(journey_id: str) -> dict | None:
-    for exploration in _read_all():
+    record_path = _journey_record_path(journey_id)
+    if record_path.exists():
+        try:
+            record = json.loads(record_path.read_text(encoding='utf-8'))
+            journey = record.get('journey') if isinstance(record, dict) else None
+            if isinstance(journey, dict):
+                return _normalize_journey(journey, {'exploration_metadata': record.get('exploration_metadata', {})})
+        except (OSError, json.JSONDecodeError):
+            pass
+    for exploration in _iter_all():
         if not isinstance(exploration, dict):
             continue
         for journey in exploration.get('journeys', []) or []:
@@ -195,20 +304,56 @@ def delete_journey(journey_id: str) -> dict:
 
 def delete_journeys(journey_ids: set[str]) -> dict:
     requested_ids = {journey_id for journey_id in journey_ids if journey_id}
-    items = _read_all()
-    updated = []
     deleted_ids: set[str] = set()
-    for exploration in items:
-        existing_journeys = exploration.get('journeys', [])
-        journeys = [j for j in existing_journeys if j.get('journey_id') not in requested_ids]
-        deleted_ids.update(
-            j.get('journey_id') for j in existing_journeys
-            if j.get('journey_id') in requested_ids
-        )
-        if journeys:
-            exploration['journeys'] = journeys
-            exploration['exploration_metadata']['total_journeys_discovered'] = len(journeys)
-            updated.append(exploration)
+
+    def filtered_exploration(exploration: dict) -> dict | None:
+        existing = exploration.get('journeys', []) or []
+        kept = []
+        for journey in existing:
+            journey_id = journey.get('journey_id') if isinstance(journey, dict) else None
+            if journey_id in requested_ids:
+                deleted_ids.add(journey_id)
+            else:
+                kept.append(journey)
+        if not kept:
+            return None
+        exploration['journeys'] = kept
+        metadata = exploration.setdefault('exploration_metadata', {})
+        metadata['total_journeys_discovered'] = len(kept)
+        return exploration
+
+    # Rewrite the legacy array incrementally instead of loading its large DOM
+    # evidence payload into memory.
+    if JOURNEYS_FILE.exists():
+        temporary = JOURNEYS_FILE.with_name(f'{JOURNEYS_FILE.name}.{uuid4().hex}.tmp')
+        with temporary.open('w', encoding='utf-8') as target:
+            target.write('[\n')
+            first = True
+            for exploration in _iter_legacy_bundles():
+                filtered = filtered_exploration(exploration)
+                if filtered is None:
+                    continue
+                if not first:
+                    target.write(',\n')
+                json.dump(filtered, target, indent=2)
+                first = False
+            target.write('\n]\n')
+        temporary.replace(JOURNEYS_FILE)
+
+    # Newer explorations are isolated by bundle, so deleting one never
+    # requires rewriting unrelated journey evidence.
+    if JOURNEY_BUNDLES_DIR.exists():
+        for path in JOURNEY_BUNDLES_DIR.glob('*.json'):
+            try:
+                exploration = json.loads(path.read_text(encoding='utf-8'))
+            except (OSError, json.JSONDecodeError):
+                continue
+            original_count = len(exploration.get('journeys', []) or [])
+            filtered = filtered_exploration(exploration)
+            if filtered is None:
+                path.unlink(missing_ok=True)
+            elif len(filtered.get('journeys', [])) != original_count:
+                path.write_text(json.dumps(filtered, indent=2), encoding='utf-8')
     if not deleted_ids:
         return {
             'deleted_count': 0,
@@ -218,7 +363,9 @@ def delete_journeys(journey_ids: set[str]) -> dict:
             'test_cases_deleted': 0,
             'test_scripts_deleted': 0,
         }
-    _write_all(updated)
+    JOURNEYS_INDEX_FILE.unlink(missing_ok=True)
+    for journey_id in deleted_ids:
+        _journey_record_path(journey_id).unlink(missing_ok=True)
     cleanup = _cascade_delete_for_journeys(deleted_ids)
     return {
         'deleted_count': len(deleted_ids),
@@ -268,7 +415,12 @@ def cleanup_orphan_artifacts() -> dict[str, int]:
         'orphan_case_ids': sorted(removed_case_ids),
     }
 def clear_journeys() -> dict:
-    journey_ids = {journey.get('journey_id') for journey in _flatten_journeys() if journey.get('journey_id')}
+    journey_ids = {item.get('journey_id') for item in list_journey_summaries() if item.get('journey_id')}
     _write_all([])
+    for directory in (JOURNEY_BUNDLES_DIR, JOURNEY_RECORDS_DIR):
+        if directory.exists():
+            for path in directory.glob('*.json'):
+                path.unlink(missing_ok=True)
+    JOURNEYS_INDEX_FILE.unlink(missing_ok=True)
     return _cascade_delete_for_journeys(journey_ids)
 

@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
 from core.config import STORAGE_DIR
-from routers.user_story_router import list_user_stories
+from routers.user_story_router import list_user_stories, refresh_user_stories_from_jira
 from schemas.test_case_schema import TestCaseGenerateRequest, TestCaseGenerateResponse, TestCaseListResponse
 from services.artifact_file_service import write_json_file, unique_filename
 from services.journey_map_service import list_journeys
@@ -29,6 +29,21 @@ def _read():
 
 @router.post('/test-cases/generate', response_model=TestCaseGenerateResponse)
 def generate(payload: TestCaseGenerateRequest):
+    refresh_result = refresh_user_stories_from_jira(payload.user_story_ids)
+    if refresh_result.get('failed'):
+        errors = refresh_result.get('errors') or []
+        detail = '; '.join(
+            f"{item.get('jira_key')}: {item.get('error')}"
+            for item in errors[:3]
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                'Test-case generation stopped because the latest Jira user-story details '
+                f'could not be retrieved. {detail}'
+            ),
+        )
+
     journeys = [j for j in list_journeys() if j['journey_id'] in payload.journey_ids]
     stories = [s for s in list_user_stories()['items'] if s['story_id'] in payload.user_story_ids]
     cases = [item.model_dump() for item in generate_test_cases(journeys, stories)]

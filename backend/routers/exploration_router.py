@@ -17,10 +17,13 @@ def start_exploration(payload: ExplorationRequest):
         exploration = explore_application(application_url, payload.parameters, payload.crawl.model_dump(), payload.objective)
         save_journey(exploration)
         first_journey_id = exploration.journeys[0].journey_id if exploration.journeys else ''
+        first_journey = exploration.journeys[0] if exploration.journeys else None
         return ExplorationResponse(
-            message='Exploration started successfully',
+            message='Exploration completed' if first_journey and first_journey.outcome == 'Exploration Complete' else 'Exploration blocked',
             journey_id=first_journey_id,
             journey_count=len(exploration.journeys),
+            outcome=first_journey.outcome if first_journey else 'Exploration Blocked',
+            outcome_detail=first_journey.outcome_detail if first_journey else 'No journey was captured.',
             exploration_metadata=exploration.exploration_metadata.model_dump(),
         )
     except Exception as exc:

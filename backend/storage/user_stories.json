@@ -1415,47 +1415,5 @@
       "qa"
     ],
     "component": "Browser Agent"
-  },
-  {
-    "story_id": "7caa5d2e-1d43-4967-a3f2-e449a9a856f4",
-    "journey_id": "84fdd92e-07e5-4448-9397-3a575c9239c2",
-    "generated_at": "2026-07-30T07:46:38.795394+00:00",
-    "generation_source": "openai",
-    "generation_model": "gpt-4o-mini",
-    "epic": "Special Offers Exploration",
-    "module": "Special Offers Module",
-    "summary": "US-01 View Special Offers from Disneyworld",
-    "description": "As a user, I want to view special offers on the Disneyworld website so that I can explore available deals and discounts. Starting from https://disneyworld.disney.go.com/, I hover over the Tickets & Parks item in the main navigation. After the dropdown menu appears, I click on the child link 'View Special Offers'. Upon navigation, I confirm the URL contains /special-offers/ and wait for the page and offer cards to finish loading. I capture the page title, heading, filters, offer count, and all visible offer cards. I scroll through the complete page to detect lazy-loaded cards or pagination. For every offer card, I record its title, description, pricing, eligibility, CTA text, and destination URL. I test each available filter and use 'Clear All' after every filter test. I open each offer card, capture its details, then return to the Special Offers listing page before opening the next card.",
-    "acceptance_criteria": [
-      {
-        "ac_type": "functional",
-        "ac_text": "Given the user starts from https://disneyworld.disney.go.com/, when the captured journey is replayed, then the flow should follow this observed path without introducing unrelated pages: Special Offers, Deals & Discounts | Walt Disney World Resort (https://disneyworld.disney.go.com/special-offers/) -> Special Offers, Deals & Discounts | Walt Disney World Resort (https://disneyworld.disney.go.com/special-offers/) -> Special Offers, Deals & Discounts | Walt Disney World Resort (https://disneyworld.disney.go.com/special-offers/).",
-        "ac_id": ""
-      },
-      {
-        "ac_type": "functional",
-        "ac_text": "Given the journey objective is executed, when the user performs the captured actions (open - Special Offers, Deals & Discounts | Walt Disney World Resort - navigated_from: https://disneyworld.disney.go.com/; open - Walt Disney World Resort near Orlando, Florida \u2013 Official Site - page_load; inspect - page scan - Page scan found 8 headings, 18 buttons, 19 links, 7 inputs, 2 menus, and 0 forms; inspect - Visit Disney.com - visible_control_captured; inspect - Skip Navigation - visible_control_captured; inspect - Log In or Create Account - visible_control_captured; inspect - United States (English) - visible_control_captured; hover - Tickets & Parks - hover_no_change), then each navigation or same-page state change should be recorded and the final outcome should match: Journey discovered successfully from the base URL..",
-        "ac_id": ""
-      },
-      {
-        "ac_type": "ui",
-        "ac_text": "Given the journey contains 3 captured step(s) and 13 event(s), then each step should expose page title, URL, action, element label, selector or role, result, timestamp, depth, and before or after state where available.",
-        "ac_id": ""
-      },
-      {
-        "ac_type": "ui",
-        "ac_text": "Given downstream QA uses this story for automation, then selectors and UI references such as https://disneyworld.disney.go.com/special-offers/, https://disneyworld.disney.go.com/, document.querySelectorAll, a[href=\"https://www.disney.com/\"] plus validations such as any observed validation or empty-state messages should remain traceable to the original journey map and UI element extraction.",
-        "ac_id": ""
-      }
-    ],
-    "labels": [
-      "disneyworld",
-      "exploration",
-      "specialoffers"
-    ],
-    "component": "Browser Agent",
-    "jira_key": "FL-683",
-    "jira_url": "https://factspan.atlassian.net/browse/FL-683",
-    "jira_sync_status": "synced"
   }
 ]

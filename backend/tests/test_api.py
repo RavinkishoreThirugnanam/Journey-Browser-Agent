@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from main import app
+from routers.journey_router import _journey_to_detail
 
 client = TestClient(app)
 
@@ -15,6 +16,83 @@ def test_health():
     response = client.get('/health')
     assert response.status_code == 200
     assert response.json()['status'] == 'ok'
+
+
+def test_lightweight_journey_detail_keeps_replay_and_defers_heavy_evidence():
+    journey = {
+        'journey_id': 'journey-lightweight',
+        'steps': [{
+            'interactions': [{
+                'action': 'click',
+                'selector': '#target',
+                'replay': {'selector': '#target'},
+                'dom_snapshot_before': '<html>large</html>',
+                'screenshot_after': 'data:image/png;base64,large',
+                'network_events': [{'url': 'https://example.com'}],
+                'visible_elements': [{'label': 'Target'}],
+            }],
+        }],
+        'events': [{'action': 'click'}, {'action': 'navigate'}],
+        'test_hints': {
+            'live_stream_key': 'stream-key',
+            'candidate_ledger': [{'large': 'payload'}],
+            'page_ids': ['page-1'],
+            'event_ids': ['event-1'],
+        },
+    }
+
+    detail = _journey_to_detail(journey, include_evidence=False)
+
+    interaction = detail['steps'][0]['interactions'][0]
+    assert detail['event_count'] == 2
+    assert detail['events'] == []
+    assert detail['test_hints'] == {'live_stream_key': 'stream-key'}
+    assert interaction['selector'] == '#target'
+    assert interaction['replay'] == {'selector': '#target'}
+    assert 'dom_snapshot_before' not in interaction
+    assert 'screenshot_after' not in interaction
+    assert 'network_events' not in interaction
+    assert 'visible_elements' not in interaction
+
+
+def test_page_evidence_detail_deduplicates_large_capture_fields_per_page():
+    journey = {
+        'journey_id': 'journey-evidence',
+        'steps': [{
+            'step_number': 1,
+            'depth_level': 0,
+            'page_title': 'Example',
+            'page_url': 'https://example.com/page',
+            'interactions': [
+                {
+                    'action': 'inspect',
+                    'dom_snapshot_after': '<html>first</html>',
+                    'screenshot_after': 'first-image',
+                    'visible_elements': [{'label': 'First'}],
+                    'network_events': [{'url': 'large'}],
+                },
+                {
+                    'action': 'click',
+                    'dom_snapshot_after': '<html>latest</html>',
+                    'screenshot_after': 'latest-image',
+                    'visible_elements': [{'label': 'Latest'}],
+                    'network_events': [{'url': 'large'}],
+                },
+            ],
+        }],
+        'events': [],
+    }
+
+    detail = _journey_to_detail(journey, include_evidence=True)
+
+    first, latest = detail['steps'][0]['interactions']
+    assert 'dom_snapshot_after' not in first
+    assert 'screenshot_after' not in first
+    assert 'network_events' not in first
+    assert latest['dom_snapshot_after'] == '<html>latest</html>'
+    assert latest['screenshot_after'] == 'latest-image'
+    assert latest['visible_elements'] == [{'label': 'Latest'}]
+    assert 'network_events' not in latest
 
 
 def test_configuration_round_trip():
@@ -169,9 +247,40 @@ def test_journey_list_flattens_nested_exploration_bundle(monkeypatch):
         }],
     }]
 
-    monkeypatch.setattr(jms, '_read_all', lambda: sample)
+    monkeypatch.setattr(jms, '_iter_all', lambda: iter(sample))
     journeys = jms.list_journeys()
     assert len(journeys) == 1
     assert journeys[0]['journey_id'] == 'JRN-001'
     assert journeys[0]['starting_url'] == 'https://example.com/'
     assert journeys[0]['app_url'] == 'https://example.com/'
+
+
+def test_compact_journey_list_keeps_selection_fields_without_heavy_evidence(monkeypatch):
+    from services import journey_map_service as jms
+
+    sample = [{
+        'exploration_metadata': {'app_url': 'https://example.com/', 'exploration_timestamp': '2026-08-12T10:00:00Z'},
+        'journeys': [{
+            'journey_id': 'JRN-REPLAY',
+            'journey_title': 'Replay Flow',
+            'starting_url': 'https://example.com/',
+            'outcome': 'Exploration Complete',
+            'steps': [{
+                'step_number': 1,
+                'interactions': [{
+                    'action': 'click',
+                    'dom_snapshot_after': '<html>' + ('x' * 10000) + '</html>',
+                }],
+            }],
+        }],
+    }]
+
+    monkeypatch.setattr(jms, '_iter_all', lambda: iter(sample))
+    monkeypatch.setattr(jms, 'JOURNEYS_INDEX_FILE', jms.STORAGE_DIR / '.missing-test-journeys.index.json')
+    monkeypatch.setattr(jms, '_write_json_file', lambda _path, _items: None)
+    summaries = jms.list_journey_summaries()
+
+    assert summaries[0]['journey_id'] == 'JRN-REPLAY'
+    assert summaries[0]['interaction_count'] == 1
+    assert 'steps' not in summaries[0]
+    assert 'events' not in summaries[0]

@@ -53,8 +53,10 @@ export function Shell() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand-block">
-          <div className="brand-mark">JA</div>
-          <div>
+          <div className="brand-mark">
+            <img src="/factspan_logo.svg" alt="Factspan" className="brand-logo" />
+          </div>
+          <div className="brand-copy">
             <div className="brand">Journey AI</div>
             <div className="brand-subtitle">Enterprise journey discovery and test automation</div>
           </div>
@@ -78,10 +80,6 @@ export function Shell() {
           <div>
             <div className="topbar-title">Journey AI Control Center</div>
             <div className="topbar-subtitle">{topbarLabels[location.pathname] || location.pathname.replace('/', '').replace('-', ' ')}</div>
-          </div>
-          <div className="topbar-right">
-            <span className="badge badge-neutral">Enterprise</span>
-            <span className="profile-chip">User Profile</span>
           </div>
         </header>
         <main className="content">

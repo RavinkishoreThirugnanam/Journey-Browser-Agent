@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -131,3 +132,82 @@ def create_test_case_issue(config: JiraConfiguration, *, summary: str, descripti
     if last_error:
         raise last_error
     raise JiraClientError('Unable to create Jira test case issue')
+
+
+def _adf_node_text(node: Any) -> str:
+    if isinstance(node, str):
+        return node
+    if not isinstance(node, dict):
+        return ''
+    if node.get('type') == 'text':
+        return str(node.get('text') or '')
+    if node.get('type') == 'hardBreak':
+        return '\n'
+    return ''.join(_adf_node_text(child) for child in node.get('content') or [])
+
+
+def _adf_blocks(document: Any) -> list[tuple[str, str]]:
+    if isinstance(document, str):
+        return [('paragraph', line.strip()) for line in document.splitlines() if line.strip()]
+    if not isinstance(document, dict):
+        return []
+
+    blocks: list[tuple[str, str]] = []
+    for node in document.get('content') or []:
+        if not isinstance(node, dict):
+            continue
+        node_type = str(node.get('type') or '')
+        if node_type in {'paragraph', 'heading'}:
+            text = _adf_node_text(node).strip()
+            if text:
+                blocks.append((node_type, text))
+        elif node_type in {'bulletList', 'orderedList'}:
+            for list_item in node.get('content') or []:
+                text = _adf_node_text(list_item).strip()
+                if text:
+                    blocks.append(('listItem', text))
+        else:
+            blocks.extend(_adf_blocks(node))
+    return blocks
+
+
+def _extract_description_and_acceptance(document: Any) -> tuple[str, list[str], bool]:
+    blocks = _adf_blocks(document)
+    marker_index = next((
+        index for index, (_, text) in enumerate(blocks)
+        if text.strip().rstrip(':').casefold() in {'acceptance criteria', 'acceptance criterion'}
+    ), None)
+    if marker_index is None:
+        return '\n\n'.join(text for _, text in blocks).strip(), [], False
+
+    description = '\n\n'.join(text for _, text in blocks[:marker_index]).strip()
+    criteria = []
+    for _, text in blocks[marker_index + 1:]:
+        cleaned = text.strip().lstrip('-*• ').strip()
+        if cleaned:
+            criteria.append(cleaned)
+    return description, criteria, True
+
+
+def get_issue(config: JiraConfiguration, issue_key: str) -> dict[str, Any]:
+    key = str(issue_key or '').strip()
+    if not key:
+        raise JiraClientError('Jira issue key is required')
+    fields = 'summary,description,labels,updated'
+    response = _request(config, 'GET', f'/rest/api/3/issue/{quote(key, safe="")}?fields={fields}')
+    if response.status_code >= 400:
+        raise JiraClientError(f'Jira issue retrieval failed for {key}: {response.status_code} {response.text[:300]}')
+    payload = response.json()
+    issue_fields = payload.get('fields') or {}
+    description, acceptance_criteria, criteria_found = _extract_description_and_acceptance(issue_fields.get('description'))
+    resolved_key = str(payload.get('key') or key)
+    return {
+        'jira_key': resolved_key,
+        'jira_url': f"{config.base_url.rstrip('/')}/browse/{resolved_key}",
+        'summary': str(issue_fields.get('summary') or ''),
+        'description': description,
+        'acceptance_criteria': acceptance_criteria,
+        'acceptance_criteria_found': criteria_found,
+        'labels': [str(label) for label in issue_fields.get('labels') or []],
+        'updated': str(issue_fields.get('updated') or ''),
+    }

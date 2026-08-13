@@ -8,8 +8,8 @@ router = APIRouter()
 
 
 @router.get("/export/{artifact_type}")
-def export(artifact_type: str):
-    return export_artifact(artifact_type)
+def export(artifact_type: str, preview: bool = False):
+    return export_artifact(artifact_type, preview=preview)
 
 
 @router.get("/export/{artifact_type}/download")

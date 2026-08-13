@@ -74,8 +74,8 @@ export function TestCasesPage() {
     }, {})
   }, [visibleTestCases])
 
-  const getJourneyLabel = (journey) => journey?.journey_title || journey?.source_url || journey?.application_url || journey?.journey_id || 'Journey map'
-  const getStoryLabel = (story) => story?.summary || story?.title || story?.story_id || 'User story'
+  const getJourneyLabel = (journey) => journey?.journey_title || journey?.source_url || journey?.application_url || 'Journey map'
+  const getStoryLabel = (story) => story?.summary || story?.title || 'User story'
 
   const selectAllJourneys = () => {
     setSelectedJourneys(journeys.map((journey) => journey.journey_id))
@@ -100,6 +100,10 @@ export function TestCasesPage() {
   const addJourneyFromDropdown = (event) => {
     const journeyId = event.target.value
     if (!journeyId) return
+    if (journeyId === '__all__') {
+      selectAllJourneys()
+      return
+    }
     setSelectedJourneys((current) => (current.includes(journeyId) ? current : [...current, journeyId]))
     setJourneyPickerValue('')
   }
@@ -144,8 +148,10 @@ export function TestCasesPage() {
       const result = await api.generateTestCases({ journey_ids: journeyIdsForStories, user_story_ids: selectedStories })
       setMessage(`Generated ${result?.count ?? 0} test cases for ${selectedStories.length} selected user stories.`)
       await refetch()
-    } catch {
-      setMessage('Unable to generate test cases.')
+    } catch (error) {
+      let detail = error?.message || 'Unable to generate test cases.'
+      try { detail = JSON.parse(detail)?.detail || detail } catch {}
+      setMessage(detail)
     } finally {
       setGenerating(false)
     }
@@ -182,6 +188,7 @@ export function TestCasesPage() {
               <span>Add journey context</span>
               <select value={journeyPickerValue} onChange={addJourneyFromDropdown} disabled={!journeys.length || !availableJourneyCount}>
                 <option value="">{journeys.length ? availableJourneyCount ? 'Choose a journey map' : 'All journey maps selected' : 'No journey maps available'}</option>
+                <option value="__all__" disabled={!availableJourneyCount}>Select all journey maps</option>
                 {journeys.map((journey) => (
                   <option key={journey.journey_id} value={journey.journey_id} disabled={selectedJourneySet.has(journey.journey_id)}>
                     {getJourneyLabel(journey)}
@@ -190,7 +197,6 @@ export function TestCasesPage() {
               </select>
             </label>
             <div className="test-case-minimal-control-actions">
-              <button type="button" className="secondary-button" onClick={selectAllJourneys} disabled={!journeys.length || !availableJourneyCount}>Select all</button>
               <button type="button" className="secondary-button" onClick={clearSelection} disabled={!selectedJourneys.length && !selectedStories.length}>Clear</button>
             </div>
           </div>
@@ -218,9 +224,7 @@ export function TestCasesPage() {
                   <p>Select only the stories that should produce test cases.</p>
                 </div>
                 <div className="test-case-minimal-actions">
-                  <button type="button" className="secondary-button" onClick={selectAllVisibleStories} disabled={!selectedJourneyStories.length}>Select all stories</button>
                   <button type="button" className="secondary-button" onClick={clearStorySelection} disabled={!selectedStories.length}>Clear stories</button>
-                  <button type="button" onClick={generate} disabled={generating || loading || !selectedStories.length}>{generating ? 'Generating...' : 'Generate Test Cases'}</button>
                 </div>
               </div>
 
@@ -233,7 +237,6 @@ export function TestCasesPage() {
                         <input type="checkbox" checked={selectedStorySet.has(storyIdOf(story))} onChange={() => toggleStory(storyIdOf(story))} />
                         <div className="test-case-minimal-story-copy">
                           <strong>{getStoryLabel(story)}</strong>
-                          <span>{storyIdOf(story)}</span>
                         </div>
                         <div className="test-case-minimal-story-context">
                           <small>{getJourneyLabel(journey)}</small>
@@ -249,6 +252,11 @@ export function TestCasesPage() {
                   <span>Generate user stories in Step 2, then return here.</span>
                 </div>
               )}
+
+              <div className="test-case-minimal-bottom-actions">
+                <button type="button" className="secondary-button" onClick={selectAllVisibleStories} disabled={!selectedJourneyStories.length}>Select all stories</button>
+                <button type="button" onClick={generate} disabled={generating || loading || !selectedStories.length}>{generating ? 'Generating...' : 'Generate Test Cases'}</button>
+              </div>
 
               {journeysWithoutStories.length && selectedJourneyStories.length ? (
                 <p className="test-case-minimal-note">{journeysWithoutStories.length} selected journey{journeysWithoutStories.length > 1 ? 's have' : ' has'} no generated user stories and {journeysWithoutStories.length > 1 ? 'are' : 'is'} hidden from this list.</p>
@@ -274,7 +282,7 @@ export function TestCasesPage() {
                     const journey = caseJourney(item)
                     return (
                       <tr key={item.test_case_id}>
-                        <td><strong>{item.title}</strong><small>{item.test_case_id}</small></td>
+                        <td><strong>{item.title}</strong></td>
                         <td>{getStoryLabel(story)}</td>
                         <td>{getJourneyLabel(journey)}</td>
                         <td><Badge tone="success">{item.test_case_type || 'Functional'}</Badge></td>
@@ -306,7 +314,6 @@ export function TestCasesPage() {
               <div>
                 <span className="eyebrow">Generated Test Case</span>
                 <h3 id="test-case-preview-title">{previewCase.title}</h3>
-                <p>{previewCase.test_case_id}</p>
               </div>
               <button type="button" className="secondary-button modal-close-button" onClick={() => setPreviewCase(null)} aria-label="Close test case preview">Close</button>
             </div>

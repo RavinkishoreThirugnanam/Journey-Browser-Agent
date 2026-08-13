@@ -1,9 +1,12 @@
 ﻿import React, { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { Badge, Field, PageHeader } from '../components/Ui'
 import { JourneyPage } from './JourneyPage'
 
 export function WorkflowPage() {
+  const [searchParams] = useSearchParams()
+  const requestedJourneyId = searchParams.get('journey') || ''
   const [form, setForm] = useState({ application_url: 'https://example.com', objective: 'Discover the primary user journey from the application home page.', environment: 'development', project: 'Demo', max_depth: 3, max_pages: 8, follow_links: true, min_events: 10 })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
@@ -38,7 +41,11 @@ export function WorkflowPage() {
         parameters: { environment: form.environment, project: form.project },
         crawl: { max_depth: Number(form.max_depth), max_pages: Number(form.max_pages), follow_links: form.follow_links, min_events: Number(form.min_events) },
       })
-      setMessage(`Exploration complete: ${result.journey_id}. Review the discovered journey below.`)
+      if (/blocked/i.test(result.outcome || '')) {
+        setMessage(`Exploration blocked: ${result.outcome_detail || 'The required objective path was not completed.'}`)
+      } else {
+        setMessage('Exploration complete. Review the discovered journey below.')
+      }
       setLatestJourneyId(result.journey_id || '')
       setJourneyRefreshKey((current) => current + 1)
       setShowCreateModal(false)
@@ -67,9 +74,9 @@ export function WorkflowPage() {
         description="Review created journey maps first, then create new journey maps from a target application URL when needed."
         actions={<button type="button" onClick={() => setShowCreateModal(true)}>Create New Journey</button>}
       />
-      {message && <div className="notification-row workflow-page-notification"><Badge tone={message.includes('Failed') ? 'danger' : 'success'}>{message}</Badge></div>}
+      {message && <div className="notification-row workflow-page-notification"><Badge tone={/(failed|blocked)/i.test(message) ? 'danger' : 'success'}>{message}</Badge></div>}
       <div ref={discoveryRef} className="workflow-discovery-section workflow-discovery-first">
-        <JourneyPage refreshKey={journeyRefreshKey} initialSelectedId={latestJourneyId} />
+        <JourneyPage showJourneyList={false} refreshKey={journeyRefreshKey} initialSelectedId={latestJourneyId || requestedJourneyId} />
       </div>
 
       {showCreateModal && (

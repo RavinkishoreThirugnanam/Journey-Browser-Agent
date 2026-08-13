@@ -3,6 +3,14 @@ import mermaid from 'mermaid'
 mermaid.initialize({
   startOnLoad: false,
   theme: 'base',
+  flowchart: {
+    useMaxWidth: true,
+    htmlLabels: true,
+    wrappingWidth: 260,
+    nodeSpacing: 42,
+    rankSpacing: 56,
+    diagramPadding: 18,
+  },
   themeVariables: {
     primaryColor: '#ff6600',
     primaryTextColor: '#333333',

@@ -35,14 +35,30 @@ function uniqueEvidenceItems(items, limit = 24) {
 }
 
 function extractDomPageEvidence(html) {
-  if (!html || typeof DOMParser === 'undefined') return { headings: [], descriptions: [], cards: [], ctas: [] }
+  if (!html || typeof DOMParser === 'undefined') return { title: '', primaryHeading: '', headings: [], descriptions: [], cards: [], ctas: [] }
   try {
     const documentNode = new DOMParser().parseFromString(html, 'text/html')
     const textOf = (element) => cleanEvidenceText(element?.textContent)
+    const isNavigationChrome = (element) => Boolean(
+      element?.matches?.('[role="menuitem"]') ||
+      element?.closest?.('header, nav, footer, [role="navigation"], [role="menu"], [role="menubar"]'),
+    )
+    const isSnapshotHidden = (element) => Boolean(
+      element?.hidden ||
+      element?.getAttribute?.('aria-hidden') === 'true' ||
+      /display\s*:\s*none|visibility\s*:\s*hidden/i.test(element?.getAttribute?.('style') || ''),
+    )
+    const headingElements = Array.from(documentNode.querySelectorAll('h1, h2, h3, [role="heading"]'))
+      .filter((element) => !isNavigationChrome(element) && !isSnapshotHidden(element) && textOf(element))
     const headings = uniqueEvidenceItems(
-      Array.from(documentNode.querySelectorAll('main h1, main h2, main h3, h1, h2, h3')).map(textOf),
+      headingElements.map(textOf),
       100,
     )
+    const primaryHeadingNode = headingElements.find((element) => element.matches('main h1, [role="main"] h1, article h1'))
+      || headingElements.find((element) => element.matches('h1'))
+      || headingElements[0]
+    const primaryHeading = textOf(primaryHeadingNode)
+    const title = textOf(documentNode.querySelector('title'))
     const descriptions = uniqueEvidenceItems(
       Array.from(documentNode.querySelectorAll('main p, article p, [class*="description"]')).map(textOf).filter((text) => text.length >= 30),
       100,
@@ -73,9 +89,9 @@ function extractDomPageEvidence(html) {
       Array.from(documentNode.querySelectorAll('main a, main button, [role="main"] a, [role="main"] button')).map(textOf),
       200,
     )
-    return { headings, descriptions, cards: uniqueCards.slice(0, 200), ctas }
+    return { title, primaryHeading, headings, descriptions, cards: uniqueCards.slice(0, 200), ctas }
   } catch {
-    return { headings: [], descriptions: [], cards: [], ctas: [] }
+    return { title: '', primaryHeading: '', headings: [], descriptions: [], cards: [], ctas: [] }
   }
 }
 
@@ -121,6 +137,8 @@ function buildPageEvidence(steps) {
       if (domHtml) {
         page.domSnapshotCount += 1
         const domEvidence = extractDomPageEvidence(domHtml)
+        const meaningfulTitle = domEvidence.primaryHeading || domEvidence.title
+        if (meaningfulTitle) page.title = meaningfulTitle
         page.headings.push(...domEvidence.headings)
         page.descriptions.push(...domEvidence.descriptions)
         page.cards.push(...domEvidence.cards)
@@ -162,6 +180,8 @@ function interactionToLiveEvent(interaction, step, index) {
   }
   return {
     timestamp: interaction.event_timestamp || index,
+    sequence: interaction.sequence_id ?? interaction.interaction_number ?? index + 1,
+    recorded_action: interaction.action || 'inspect',
     type: `persisted_${interaction.action || 'interaction'}`,
     status: statusByAction[interaction.action] || 'Captured evidence',
     url: interaction.page_url || step.page_url,
@@ -179,6 +199,27 @@ function interactionToLiveEvent(interaction, step, index) {
     replay_selector: interaction.replay?.selector,
   }
 }
+
+function chronologicalJourneyInteractions(steps) {
+  const captured = []
+  steps.forEach((step, stepIndex) => {
+    const interactions = Array.isArray(step?.interactions) ? step.interactions : []
+    interactions.filter(Boolean).forEach((interaction, interactionIndex) => {
+      captured.push({ interaction, step, sourceOrder: (stepIndex * 100000) + interactionIndex })
+    })
+  })
+  return captured.sort((left, right) => {
+    const leftSequence = Number(left.interaction.sequence_id ?? left.interaction.interaction_number)
+    const rightSequence = Number(right.interaction.sequence_id ?? right.interaction.interaction_number)
+    if (Number.isFinite(leftSequence) && Number.isFinite(rightSequence) && leftSequence !== rightSequence) {
+      return leftSequence - rightSequence
+    }
+    const leftTime = Date.parse(left.interaction.event_timestamp || '')
+    const rightTime = Date.parse(right.interaction.event_timestamp || '')
+    if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return leftTime - rightTime
+    return left.sourceOrder - right.sourceOrder
+  })
+}
 const detailTabs = [
   { id: 'journey-detail', label: 'Journey Details' },
   { id: 'visualization', label: 'Journey Visualization' },
@@ -186,7 +227,7 @@ const detailTabs = [
   { id: 'flow-details', label: 'Page Evidence' },
 ]
 
-export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
+export function JourneyPage({ refreshKey = 0, initialSelectedId = '', showJourneyList = true } = {}) {
   const [data, setData] = useState([])
   const [selected, setSelected] = useState('')
   const [selectedForDelete, setSelectedForDelete] = useState([])
@@ -203,10 +244,14 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
   const [replayEvents, setReplayEvents] = useState([])
   const [replayIndex, setReplayIndex] = useState(-1)
   const [replayPlaying, setReplayPlaying] = useState(false)
+  const [openEvidencePages, setOpenEvidencePages] = useState({})
+  const [evidenceJourneyId, setEvidenceJourneyId] = useState('')
+  const [evidenceLoading, setEvidenceLoading] = useState(false)
   const detailRef = useRef(null)
   const liveTimelineRef = useRef(null)
   const selectedRef = useRef('')
   const vizRequestRef = useRef(0)
+  const replayStartedRef = useRef('')
 
   const load = async () => {
     setLoading(true)
@@ -233,6 +278,9 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
     setReplayIndex(-1)
     setReplayPlaying(false)
     setLiveStatus('')
+    setEvidenceJourneyId('')
+    setEvidenceLoading(false)
+    replayStartedRef.current = ''
     vizRequestRef.current += 1
   }, [selected])
 
@@ -251,14 +299,31 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
       setDetail(null)
       return
     }
-    api.getJourney(selected).then((result) => {
+    api.getJourney(selected, false).then((result) => {
+      if (selectedRef.current !== selected) return
       setDetail(result)
       setActiveTab('journey-detail')
       requestAnimationFrame(() => {
-        detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        detailRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' })
       })
-    }).catch(() => setDetail(null))
+    }).catch(() => {
+      if (selectedRef.current === selected) setDetail(null)
+    })
   }, [selected])
+
+  useEffect(() => {
+    if (activeTab !== 'flow-details' || !selected || evidenceJourneyId === selected || evidenceLoading) return
+    setEvidenceLoading(true)
+    api.getJourney(selected, true).then((result) => {
+      if (selectedRef.current !== selected) return
+      setDetail(result)
+      setEvidenceJourneyId(selected)
+    }).catch(() => {
+      if (selectedRef.current === selected) setMessage('Unable to load the complete page evidence package.')
+    }).finally(() => {
+      if (selectedRef.current === selected) setEvidenceLoading(false)
+    })
+  }, [activeTab, selected, evidenceJourneyId])
 
   useEffect(() => {
     if (activeTab !== 'live-browser' || !detail) return
@@ -267,9 +332,10 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
   useEffect(() => {
     if (activeTab !== 'live-browser' || !detail) return
     const url = detail.starting_url || detail.source_url || detail.application_url
-    if (!url) return
+    const streamKey = detail.test_hints?.live_stream_key || url
+    if (!url || !streamKey) return
     let cancelled = false
-    const source = new EventSource(api.liveEventsUrl(url))
+    const source = new EventSource(api.liveEventsUrl(streamKey))
     source.onmessage = (event) => {
       try {
         const next = JSON.parse(event.data)
@@ -280,9 +346,9 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
       }
     }
     source.onerror = () => source.close()
-    // Do not reset a completed run when the user opens this tab. The noVNC
-    // viewport is shared with the crawl and should remain on its last page.
-    // Only initialize an empty live session when there is no persisted run.
+    // Opening the tab does not navigate the live browser directly. If a run
+    // exists, the replay effect below starts it from the recorded first event.
+    // Empty journeys still initialize the live browser at the base URL.
     const hasPersistedRun = Array.isArray(detail.steps) && detail.steps.some((step) => Array.isArray(step?.interactions) && step.interactions.length)
     if (!hasPersistedRun && !liveEvents.length) {
       api.navigateLiveBrowser({ url }).then((result) => {
@@ -291,7 +357,7 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
         if (!cancelled) setLiveStatus('Live browser unavailable: ' + (error.message || 'navigation failed'))
       })
     } else {
-      setLiveStatus('Recorded run ready. Use Replay captured journey to review it from the beginning.')
+      setLiveStatus('Recorded run found. Starting replay from the first event...')
     }
     return () => { cancelled = true; source.close() }
   }, [activeTab, detail?.journey_id])
@@ -423,14 +489,11 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
     : (detail ? [{ journey_id: detail.journey_id, steps }] : [])
   const selectedJourney = data.find((item) => item.journey_id === selected) || null
   const pageEvidence = useMemo(() => buildPageEvidence(steps), [detail?.steps])
-  const persistedLiveEvents = useMemo(() => steps.flatMap((step) => (
-    Array.isArray(step.interactions)
-      ? step.interactions.filter(Boolean).map((interaction, index) => interactionToLiveEvent(interaction, step, index))
-      : []
-  )), [steps])
-  const replayInteractions = useMemo(() => steps.flatMap((step) => (
-    Array.isArray(step.interactions)
-      ? step.interactions.filter(Boolean).map((interaction) => ({
+  const chronologicalInteractions = useMemo(() => chronologicalJourneyInteractions(steps), [detail?.steps])
+  const persistedLiveEvents = useMemo(() => chronologicalInteractions.map(({ interaction, step }, index) => (
+    interactionToLiveEvent(interaction, step, index)
+  )), [chronologicalInteractions])
+  const replayInteractions = useMemo(() => chronologicalInteractions.map(({ interaction, step }) => ({
         action: interaction.action || 'inspect',
         element: interaction.element_label || interaction.element_type || '',
         element_id: interaction.element_id || '',
@@ -440,9 +503,7 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
         page_url: interaction.page_url || step.page_url || '',
         destination_url: interaction.destination_url || '',
         coordinates: interaction.coordinates || {},
-      }))
-      : []
-  )), [steps])
+      })), [chronologicalInteractions])
   const liveActivityEvents = useMemo(() => {
     const merged = [
       ...(Array.isArray(persistedLiveEvents) ? persistedLiveEvents : []),
@@ -517,6 +578,13 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
       })
     }
   }
+
+  useEffect(() => {
+    if (activeTab !== 'live-browser' || !detail?.journey_id || !replayInteractions.length) return
+    if (replayStartedRef.current === detail.journey_id) return
+    replayStartedRef.current = detail.journey_id
+    replayCapturedJourney()
+  }, [activeTab, detail?.journey_id, replayInteractions.length])
   const rows = data.map((j) => (
     <tr
       key={j.journey_id}
@@ -526,16 +594,16 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
       <td>
         <input
           type="checkbox"
-          aria-label={`Select journey ${j.journey_id} for deletion`}
+          aria-label="Select journey for deletion"
           checked={selectedForDelete.includes(j.journey_id)}
           onClick={(event) => event.stopPropagation()}
           onChange={() => toggleJourneyForDelete(j.journey_id)}
         />
       </td>
-      <td>{j.journey_id}</td>
+      <td>{j.journey_title || 'Journey'}</td>
       <td>{j.starting_url || j.source_url || j.application_url || '-'}</td>
-      <td><Badge tone="info">{j.steps?.length ?? 0} steps</Badge></td>
-      <td><Badge tone="neutral">{j.events?.length ?? 0} events</Badge></td>
+      <td><Badge tone="info">{j.step_count ?? j.steps?.length ?? 0} steps</Badge></td>
+      <td><Badge tone="neutral">{j.interaction_count ?? j.events?.length ?? 0} events</Badge></td>
       <td>
         <button
           className="secondary-button icon-button danger-button"
@@ -548,7 +616,7 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
           disabled={loading}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M7 7h10M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7m-7 0 .7 11.2A1.8 1.8 0 0 0 10.5 20h3a1.8 1.8 0 0 0 1.8-1.8L16 7M10 11v5m4-5v5" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <path d="M7 7h10M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7m-7 0 .7 11.2A1.8 1.8 0 0 0 10.5 20h3a1.8 1.8 0 0 0 1.8-1.8L16 7M10 11v5m4-5v5" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
           </svg>
         </button>
       </td>
@@ -585,16 +653,12 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
           </div>
           <div className="journey-report-meta">
             <div>
-              <span>Journey ID</span>
-              <strong>{formatValue(detail.journey_id || selected)}</strong>
-            </div>
-            <div>
               <span>Steps</span>
               <strong>{steps.length}</strong>
             </div>
             <div>
               <span>Events</span>
-              <strong>{detail.events?.length ?? selectedJourney?.events?.length ?? 0}</strong>
+              <strong>{detail.event_count ?? selectedJourney?.interaction_count ?? detail.events?.length ?? 0}</strong>
             </div>
             <div>
               <span>Browser</span>
@@ -602,11 +666,6 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
             </div>
           </div>
 
-          <div className="journey-evidence-summary">
-            <div><span>Exploration ID</span><strong>{formatValue(detail.exploration_metadata?.exploration_id || detail.test_hints?.exploration_id)}</strong></div>
-            <div><span>Evidence page IDs</span><strong>{detail.test_hints?.page_ids?.length ?? steps.length}</strong></div>
-            <div><span>Interaction event IDs</span><strong>{detail.test_hints?.event_ids?.length ?? steps.reduce((total, step) => total + (step.interactions?.length ?? 0), 0)}</strong></div>
-          </div>
           <div className="journey-markdown-grid">
             <div className="journey-report-section">
               <h3>Starting Context</h3>
@@ -626,20 +685,6 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
                 <li><strong>Journeys discovered:</strong> {formatValue(metadata.total_journeys_discovered)}</li>
               </ul>
             </div>
-          </div>
-
-          <div className="journey-report-section">
-            <h3>Outcome Notes</h3>
-            <p>{detail.outcome_detail || detail.reasoning || 'No additional outcome notes were captured for this journey.'}</p>
-          </div>
-
-          <div className="journey-report-section">
-            <h3>Discovery Summary</h3>
-            <ul>
-              <li><strong>Total depth:</strong> {formatValue(detail.total_depth)}</li>
-              <li><strong>Session boundary reached:</strong> {formatValue(detail.session_boundary_reached ?? false)}</li>
-              <li><strong>UI enrichment pages:</strong> {uiElements.length}</li>
-            </ul>
           </div>
         </section>
       )
@@ -774,7 +819,6 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
             </div>
           </div>
           <div className="journey-report-meta">
-            <div><span>Selected journey</span><strong>{formatValue(selectedJourney?.journey_id || selected)}</strong></div>
             <div><span>Starting URL</span><strong>{formatValue(selectedJourney?.starting_url || detail.starting_url)}</strong></div>
             <div><span>Captured events</span><strong>{detail.events?.length ?? steps.reduce((total, step) => total + (step.interactions?.length ?? 0), 0)}</strong></div>
           </div>
@@ -807,17 +851,8 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
               <span>Evidence Mode</span>
               <strong>{rawUiElements.length ? 'DOM enriched' : (steps.length ? 'Interaction derived' : 'Legacy')}</strong>
             </div>
-            <div>
-              <span>Selected Journey</span>
-              <strong>{formatValue(selectedJourney?.journey_id || selected)}</strong>
-            </div>
           </div>
 
-          <div className="journey-evidence-summary">
-            <div><span>Exploration ID</span><strong>{formatValue(detail.exploration_metadata?.exploration_id || detail.test_hints?.exploration_id)}</strong></div>
-            <div><span>Evidence page IDs</span><strong>{detail.test_hints?.page_ids?.length ?? steps.length}</strong></div>
-            <div><span>Interaction event IDs</span><strong>{detail.test_hints?.event_ids?.length ?? steps.reduce((total, step) => total + (step.interactions?.length ?? 0), 0)}</strong></div>
-          </div>
 
 
           <div className="journey-markdown-grid">
@@ -826,7 +861,7 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
               <ul>
                 <li><strong>Browser interaction evidence:</strong> {detail.browser_agent_section || steps.length ? 'Available' : 'Not available'}</li>
                 <li><strong>Separate DOM/UI extraction:</strong> {rawUiElements.length ? 'Available' : 'Not captured separately; using interaction evidence'}</li>
-                <li><strong>Selected journey:</strong> {formatValue(selectedJourney?.journey_title || selectedJourney?.journey_id || selected)}</li>
+                <li><strong>Selected journey:</strong> {formatValue(selectedJourney?.journey_title || 'Current journey')}</li>
               </ul>
             </div>
 
@@ -844,17 +879,26 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
           <div className="journey-report-section journey-report-table-section">
             <h3>Page-Level UI Evidence</h3>
             {uiElements.length ? (
-              <Table
-                columns={['Page URL', 'Evidence Source', 'Login Context', 'UI Evidence Items']}
-                rows={uiElements.map((page) => (
-                  <tr key={page.page_url}>
-                    <td>{page.page_url}</td>
-                    <td>{page.source_file || (rawUiElements.length ? 'DOM extraction' : 'Captured interactions')}</td>
-                    <td>{String(page.is_login_flow_context)}</td>
-                    <td>{page.extracted_url_ui_elements?.page?.total_elements ?? page.extracted_url_ui_elements?.page?.elements?.length ?? 0}</td>
-                  </tr>
-                ))}
-              />
+              <div className="page-evidence-cards">
+                {uiElements.map((page) => {
+                  const count = page.extracted_url_ui_elements?.page?.total_elements ?? page.extracted_url_ui_elements?.page?.elements?.length ?? 0
+                  const isOpen = Boolean(openEvidencePages[page.page_url])
+                  return (
+                    <article className="page-evidence-card" key={page.page_url}>
+                      <button type="button" className="page-evidence-card-toggle" onClick={() => setOpenEvidencePages((current) => ({ ...current, [page.page_url]: !current[page.page_url] }))} aria-expanded={isOpen}>
+                        <span><strong>{page.page_url}</strong><small>{count} UI evidence items · {page.source_file || (rawUiElements.length ? 'DOM extraction' : 'Captured interactions')}</small></span>
+                        <span aria-hidden="true">{isOpen ? '−' : '+'}</span>
+                      </button>
+                      {isOpen ? (
+                        <div className="page-evidence-card-body">
+                          <p><strong>Login context:</strong> {String(page.is_login_flow_context)}</p>
+                          {page.extracted_url_ui_elements?.page?.elements?.length ? <pre>{JSON.stringify(page.extracted_url_ui_elements.page.elements, null, 2)}</pre> : <p>No detailed UI elements were captured for this page.</p>}
+                        </div>
+                      ) : null}
+                    </article>
+                  )
+                })}
+              </div>
             ) : (
               <p>No separate DOM/UI extraction file was captured for this journey. The table above may still show page-level evidence derived from browser interactions; full click and navigation details are in Steps &amp; Interactions.</p>
             )}
@@ -864,6 +908,9 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
     }
 
     if (activeTab === 'flow-details') {
+      if (evidenceLoading && evidenceJourneyId !== selected) {
+        return <div className="empty-state">Loading complete page evidence...</div>
+      }
       const capturedTitleCount = pageEvidence.reduce((total, page) => total + page.headings.length, 0)
       const capturedCardCount = pageEvidence.reduce((total, page) => total + page.cards.length, 0)
       const evidencedPageCount = pageEvidence.filter((page) => page.domSnapshotCount || page.screenshots.length).length
@@ -901,6 +948,9 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
             <div className="page-evidence-list">
               {pageEvidence.map((page, pageIndex) => (
                 <article key={page.url} className="page-evidence-card">
+                  {(() => {
+                      const isOpen = Boolean(openEvidencePages[`page:${page.url}`])
+                    return <>
                   <header className="page-evidence-card-head">
                     <div className="page-evidence-index">{pageIndex + 1}</div>
                     <div>
@@ -911,8 +961,11 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
                     <div className="page-evidence-badges">
                       <Badge tone="neutral">{page.headings.length} titles</Badge>
                       <Badge tone={page.cards.length ? 'success' : 'neutral'}>{page.cards.length} cards</Badge>
+                      <button type="button" className="secondary-button" onClick={() => setOpenEvidencePages((current) => ({ ...current, [`page:${page.url}`]: !isOpen }))}>{isOpen ? 'Collapse' : 'Open'}</button>
                     </div>
                   </header>
+
+                  {isOpen ? <>
 
                   <div className="page-evidence-content-grid">
                     <section className="page-evidence-content-section">
@@ -1003,6 +1056,9 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
                       />
                     </details>
                   ) : null}
+                  </> : null}
+                    </>
+                  })()}
                 </article>
               ))}
             </div>
@@ -1018,18 +1074,23 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
     return null
   }
 
+  const pageTitle = showJourneyList ? 'Created Journeys' : 'Journey Evidence'
+  const pageSubtitle = showJourneyList
+    ? 'Select a created journey map to inspect details, visualization, live replay, and page-focused evidence.'
+    : 'Review the journey created by this workflow, including visualization, replay, and page-focused evidence.'
+
   return (
     <Card
-      title="Created Journeys"
-      subtitle="Select a created journey map to inspect details, visualization, live replay, and page-focused evidence."
-      actions={(
+      title={pageTitle}
+      subtitle={pageSubtitle}
+      actions={showJourneyList ? (
         <>
           <button onClick={load} disabled={loading}>{loading ? 'Refreshing...' : 'Refresh'}</button>
           <button className="secondary-button" onClick={deleteJourneys} disabled={loading || !data.length}>Delete all journey discoveries</button>
         </>
-      )}
+      ) : null}
     >
-      <div className="journey-selection-toolbar">
+      {showJourneyList ? <div className="journey-selection-toolbar">
         <label className="journey-select-all">
           <input
             type="checkbox"
@@ -1048,8 +1109,8 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
         >
           Delete selected
         </button>
-      </div>
-      <Table columns={['Select for deletion', 'Journey ID', 'Source URL', 'Steps', 'Events', 'Action']} rows={rows} />
+      </div> : null}
+      {showJourneyList ? <Table columns={['Select for deletion', 'Journey', 'Source URL', 'Steps', 'Events', 'Action']} rows={rows} /> : null}
       <div className="inline-actions">
         {message && <div className="notification-row"><Badge tone={message.includes('deleted') ? 'danger' : 'warning'}>{message}</Badge></div>}
       </div>
@@ -1076,11 +1137,3 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '' } = {}) {
     </Card>
   )
 }
-
-
-
-
-
-
-
-
