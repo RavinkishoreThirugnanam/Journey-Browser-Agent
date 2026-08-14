@@ -20,6 +20,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="workflow" element={<WorkflowPage />} />
           <Route path="journeys" element={<JourneyPage />} />
+          <Route path="journeys/:journeyId" element={<JourneyPage showJourneyList={false} />} />
           <Route path="visualization" element={<Navigate to="/workflow" replace />} />
           <Route path="configuration" element={<ConfigurationPage />} />
           <Route path="stories" element={<UserStoriesPage />} />

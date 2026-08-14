@@ -4,7 +4,7 @@ export function PageHeader({ eyebrow, title, description, actions }) {
   return (
     <div className="page-header">
       <div>
-        <div className="eyebrow">{eyebrow}</div>
+        {eyebrow && <div className="eyebrow">{eyebrow}</div>}
         <h1>{title}</h1>
         <p>{description}</p>
       </div>
@@ -17,9 +17,9 @@ export function Badge({ tone = 'neutral', children }) {
   return <span className={`badge badge-${tone}`}>{children}</span>
 }
 
-export function Card({ title, subtitle, children, actions }) {
+export function Card({ title, subtitle, children, actions, className = '' }) {
   return (
-    <section className="card">
+    <section className={`card ${className}`.trim()}>
       {(title || subtitle || actions) && (
         <div className="card-head">
           <div>

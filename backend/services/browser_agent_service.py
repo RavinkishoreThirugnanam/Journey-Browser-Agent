@@ -3281,7 +3281,7 @@ def _objective_requires_deterministic_navigation(objective: str) -> bool:
     return len(_objective_targets(objective)) > 1
 
 
-def explore_application(application_url: str, parameters: dict[str, str], crawl_settings: dict[str, object] | None = None, objective: str = "Discover the primary user journey from the application home page.") -> ExplorationResult:
+def explore_application(application_url: str, parameters: dict[str, str], crawl_settings: dict[str, object] | None = None, objective: str = "Discover the primary user journey from the application home page.", stream_key: str = '') -> ExplorationResult:
     objective = _validate_objective_input(objective)
     # Compile the immutable navigation contract before any MCP, LLM-agent, or
     # Playwright browser activity begins. All later target selection is derived
@@ -3302,7 +3302,7 @@ def explore_application(application_url: str, parameters: dict[str, str], crawl_
         browser='browser_use' if runtime['browser_use_enabled'] and _browser_use_available() else 'chromium',
     )
 
-    journey_id = str(uuid4())
+    journey_id = str(stream_key or uuid4())
     browser_use_result = None
     browser_use_error = ''
     mcp_result = None
@@ -3491,5 +3491,20 @@ def explore_application(application_url: str, parameters: dict[str, str], crawl_
     metadata.total_journeys_discovered = 1
     journey = journey.model_copy(update={'business_assurance': build_business_assurance(journey.model_dump(), metadata.model_dump())})
     exploration = ExplorationResult(exploration_metadata=metadata, journeys=[journey])
+    publish_event(journey_id, {
+        'type': 'journey_map_building',
+        'status': 'Creating journey map from captured evidence',
+        'url': application_url,
+        'page_count': len(steps),
+        'interaction_count': sum(len(step.interactions) for step in steps),
+        'result': 'Organizing visited pages and recorded interactions into the journey review package.',
+    })
     _persist_browser_run_artifacts(exploration, runtime)
+    publish_event(journey_id, {
+        'type': 'journey_artifacts_ready',
+        'status': 'Journey evidence package created',
+        'url': application_url,
+        'page_count': len(steps),
+        'interaction_count': sum(len(step.interactions) for step in steps),
+    })
     return exploration

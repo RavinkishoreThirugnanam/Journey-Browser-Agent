@@ -118,9 +118,16 @@ class JourneyDetailResponse(BaseModel):
 
 
 class JourneyVisualizeRequest(BaseModel):
-    journey_id: str
+    journey_id: str = ''
+    journey_ids: list[str] = Field(default_factory=list)
+    root_feature: str = Field(default='', max_length=200)
+    mode: str = 'single'
 
 
 class JourneyVisualizeResponse(BaseModel):
-    journey_id: str
+    journey_id: str = ''
+    journey_ids: list[str] = Field(default_factory=list)
+    root_feature: str = ''
+    mode: str = 'single'
+    branch_count: int = 0
     mermaid: str

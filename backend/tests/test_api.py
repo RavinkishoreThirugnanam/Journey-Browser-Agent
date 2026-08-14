@@ -124,6 +124,15 @@ def test_exploration_and_journey_flow():
     viz = client.post('/api/v1/journeys/visualize', json={'journey_id': journey_id})
     assert viz.status_code == 200
     assert 'flowchart TD' in viz.json()['mermaid']
+    consolidated = client.post('/api/v1/journeys/visualize', json={
+        'mode': 'consolidated',
+        'journey_ids': [journey_id],
+        'root_feature': 'Account Settings',
+    })
+    assert consolidated.status_code == 200
+    assert consolidated.json()['mode'] == 'consolidated'
+    assert consolidated.json()['root_feature'] == 'Account Settings'
+    assert '["Account Settings"]' in consolidated.json()['mermaid']
 
 
 def test_user_story_generation_flow():

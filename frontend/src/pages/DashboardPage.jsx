@@ -1,28 +1,27 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import { Badge, Card, PageHeader } from '../components/Ui'
+import { Badge, PageHeader } from '../components/Ui'
 
-function Stat({ label, value, note }) {
-  return (
-    <div className="stat-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{note}</small>
-    </div>
-  )
+function targetName(value) {
+  try {
+    return new URL(value).hostname
+  } catch {
+    return value || 'No target captured'
+  }
 }
 
-function RecentItem({ title, subtitle, badge, onClick }) {
-  return (
-    <button type="button" className="detail-row recent-journey-button" onClick={onClick} aria-label={`Open journey details for ${title}`}>
-      <div>
-        <strong>{title}</strong>
-        <small>{subtitle}</small>
-      </div>
-      <Badge tone="info">{badge}</Badge>
-    </button>
-  )
+function capturedWhen(value) {
+  const timestamp = new Date(value).getTime()
+  if (!Number.isFinite(timestamp)) return 'Recently'
+  const elapsed = Math.max(0, Date.now() - timestamp)
+  const hours = Math.floor(elapsed / 3600000)
+  if (hours < 1) return 'Just now'
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  const days = Math.floor(hours / 24)
+  if (days === 1) return 'Yesterday'
+  if (days < 30) return `${days} days ago`
+  return new Date(value).toLocaleDateString()
 }
 
 export function DashboardPage() {
@@ -74,50 +73,64 @@ export function DashboardPage() {
   }, [])
 
   const totals = useMemo(() => [
-    { label: 'Journeys', value: counts.journeys, note: 'Captured from browser discovery' },
-    { label: 'User Stories', value: counts.stories, note: 'Ready for Jira sync' },
-    { label: 'Test Cases', value: counts.cases, note: 'Generated from stories' },
-    { label: 'Test Scripts', value: counts.scripts, note: 'Feature + JS artifacts' },
+    { label: 'journeys', value: counts.journeys },
+    { label: 'user stories', value: counts.stories },
+    { label: 'test cases', value: counts.cases },
+    { label: 'test scripts', value: counts.scripts },
   ], [counts])
 
   return (
     <>
-      <PageHeader eyebrow="Dashboard" title="Journey AI Summary Center" description="Monitor the latest pipeline output, summary counts, and quick actions from one place." />
-      <div className="dashboard-grid">
-        <div className="hero-stat-grid">
-          {totals.map((stat) => <Stat key={stat.label} {...stat} />)}
-        </div>
-
-        <div className="grid dashboard-primary-grid">
-          <Card title="Quick Actions" subtitle="Open the journey workflow, review previous journeys, or manage application configuration.">
-            <div className="inline-actions">
-              <button onClick={() => nav('/workflow')}>Open Workflow</button>
-              <button className="secondary-button" onClick={() => nav('/journeys')}>View Previous Journeys</button>
-              <button className="secondary-button" onClick={() => nav('/configuration')}>Open Configuration</button>
+      <PageHeader eyebrow="Dashboard" title="Quality Engineering Automation Overview" description="Monitor journey discovery, test design, automation assets, and the latest QA workflow results from one place." />
+      <div className="dashboard-minimal">
+        <section className="dashboard-minimal-grid" aria-label="Journey workspace overview">
+          <section className="dashboard-minimal-panel dashboard-start-panel">
+            <header><h2>Start Here</h2></header>
+            <div className="dashboard-start-content">
+              <p>New to this workspace? Run an exploration—point the browser agent at any URL and describe what it should discover.</p>
+              <button type="button" onClick={() => nav('/workflow?create=1')}>＋&nbsp; Create a New Journey</button>
+              <button type="button" className="dashboard-text-action" onClick={() => nav('/workflow')}>Browse Existing Journeys</button>
+              {message && <div className="notification-row"><Badge tone="warning">{message}</Badge></div>}
             </div>
-            {message && <div className="notification-row"><Badge tone="warning">{message}</Badge></div>}
-          </Card>
+          </section>
 
-          <Card title="Recent Journeys" subtitle="Latest discovered journeys and entry points.">
+          <section className="dashboard-minimal-panel dashboard-recent-panel">
+            <header>
+              <h2>Recent Journeys</h2>
+              <span className="dashboard-total-pill">{counts.journeys} total</span>
+            </header>
             {loading ? (
-              <div className="empty-state">Loading recent journeys...</div>
+              <div className="dashboard-minimal-empty">Loading recent journeys...</div>
             ) : latestJourneys.length ? (
-              <div className="stack">
-                {latestJourneys.map((journey) => (
-                  <RecentItem
-                    key={journey.journey_id}
-                    title={journey.journey_title || 'Journey'}
-                    subtitle={journey.source_url || 'No source URL captured'}
-                    badge={(journey.step_count ?? 0) + ' steps'}
-                    onClick={() => nav(`/journeys?journey=${encodeURIComponent(journey.journey_id)}`)}
-                  />
-                ))}
+              <div className="dashboard-recent-table-wrap">
+                <table className="dashboard-recent-table">
+                  <thead><tr><th>Journey</th><th>Target</th><th>Captured</th></tr></thead>
+                  <tbody>
+                    {latestJourneys.map((journey) => (
+                      <tr key={journey.journey_id}>
+                        <td><button type="button" onClick={() => nav(`/journeys/${encodeURIComponent(journey.journey_id)}`)}>{journey.journey_title || 'Journey'}</button></td>
+                        <td>{targetName(journey.source_url)}</td>
+                        <td>{capturedWhen(journey.captured_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            ) : (
-              <div className="empty-state">No journeys captured yet.</div>
-            )}
-          </Card>
-        </div>
+            ) : <div className="dashboard-minimal-empty">No journeys captured yet.</div>}
+          </section>
+        </section>
+
+        <section className="dashboard-workspace-totals" aria-label="Workspace totals">
+          <span className="dashboard-totals-label">So Far in This Workspace</span>
+          <div className="dashboard-total-rail">
+            {totals.map((stat) => (
+              <div className="dashboard-total-item" key={stat.label}>
+                <strong>{stat.value}</strong>
+                <span>{stat.label}</span>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </>
   )

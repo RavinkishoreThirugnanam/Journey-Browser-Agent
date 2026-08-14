@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
-import { Badge, Card, Table } from '../components/Ui'
+import { Badge } from '../components/Ui'
 import { useFetch } from '../hooks/useFetch'
 
 function EmptyState({ title, description }) {
@@ -27,6 +28,9 @@ function jiraRefreshTime(story) {
   return Number.isNaN(value.getTime()) ? '' : 'Refreshed ' + value.toLocaleString()
 }
 export function UserStoriesPage() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const requestedJourneyId = searchParams.get('journey') || ''
   const { data, loading, refetch } = useFetch(api.getUserStories, [])
   const items = data?.items ?? []
   const [journeys, setJourneys] = useState([])
@@ -40,6 +44,11 @@ export function UserStoriesPage() {
   useEffect(() => {
     api.getJourneys().then((d) => setJourneys(d.items ?? d ?? [])).catch(() => setJourneys([]))
   }, [])
+
+  useEffect(() => {
+    if (!requestedJourneyId || !journeys.some((journey) => journey.journey_id === requestedJourneyId)) return
+    setSelectedJourneys([requestedJourneyId])
+  }, [requestedJourneyId, journeys])
 
   const storiesByJourney = useMemo(() => {
     return items.reduce((acc, story) => {
@@ -61,6 +70,13 @@ export function UserStoriesPage() {
   const selectedJourneyItems = useMemo(() => journeys.filter((journey) => selectedJourneySet.has(journey.journey_id)), [journeys, selectedJourneys])
   const selectedStories = useMemo(() => items.filter((story) => selectedJourneySet.has(story.journey_id)), [items, selectedJourneys])
   const jiraLinkedSelectedStories = useMemo(() => selectedStories.filter((story) => story.jira_key), [selectedStories])
+  const latestJiraRefresh = useMemo(() => {
+    const timestamps = selectedStories
+      .map((story) => Date.parse(story.jira_last_refreshed_at || ''))
+      .filter(Number.isFinite)
+    if (!timestamps.length) return 'Not refreshed yet'
+    return `Last refreshed ${new Date(Math.max(...timestamps)).toLocaleString()}`
+  }, [selectedStories])
   const selectedStoriesByJourney = useMemo(() => {
     return selectedJourneyItems.reduce((acc, journey) => {
       acc[journey.journey_id] = storiesByJourney[journey.journey_id] ?? []
@@ -101,13 +117,6 @@ export function UserStoriesPage() {
     if (source === 'fallback') return 'Local fallback'
     return 'Legacy'
   }
-  const generationSourceTone = (story) => {
-    const source = String(story?.generation_source || '').toLowerCase()
-    if (source === 'openai') return 'success'
-    if (source === 'fallback') return 'warning'
-    return 'neutral'
-  }
-
   const refreshStoriesFromJira = async () => {
     const storyIds = jiraLinkedSelectedStories.map((story) => story.story_id).filter(Boolean)
     if (!storyIds.length) {
@@ -189,124 +198,110 @@ export function UserStoriesPage() {
     }
   }
 
+  const selectedJourney = selectedJourneyItems[0] || null
+  const allJourneysSelected = journeys.length > 1 && selectedJourneys.length === journeys.length
+  const journeySelectionValue = allJourneysSelected ? '__all__' : (selectedJourneys.length === 1 ? selectedJourneys[0] : '')
+  const selectedJourneyLabel = allJourneysSelected ? 'All Journey Maps' : (selectedJourney ? getJourneyLabel(selectedJourney) : 'User Stories')
+
   return (
-    <Card
-      title="User Stories"
-      subtitle="Select journey context, generate stories, and review every result in one readable workspace."
-      actions={<button onClick={refetch} disabled={loading}>{loading ? 'Refreshing...' : 'Refresh'}</button>}
-    >
-      <div className="workflow-minimal-shell">
-        <div className="workflow-minimal-toolbar">
-          <div className="workflow-minimal-intro">
-            <div>
-              <span className="eyebrow">Story creation</span>
-              <h3>Generate stories from journey maps</h3>
-              <p>Add the journeys you want to cover. Existing and newly generated stories appear together below.</p>
-            </div>
-            <div className="workflow-minimal-counts" aria-label="Current user story selection">
-              <span><strong>{selectedJourneys.length}</strong> journeys</span>
-              <span><strong>{selectedStories.length}</strong> stories</span>
-            </div>
-          </div>
-
-          <div className="workflow-minimal-controls">
-            <label className="field workflow-minimal-picker">
-              <span>Add journey context</span>
-              <select value={journeyPickerValue} onChange={addJourneyFromDropdown} disabled={!journeys.length || !availableJourneyCount}>
-                <option value="">{journeys.length ? availableJourneyCount ? 'Choose a journey map' : 'All journey maps selected' : 'No journey maps available'}</option>
-                <option value="__all__" disabled={!availableJourneyCount}>Select all journey maps</option>
-                {nestedJourneys.map((journey) => (
-                  <option key={journey.journey_id} value={journey.journey_id} disabled={selectedJourneySet.has(journey.journey_id)}>
-                    {getJourneyLabel(journey)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="workflow-minimal-actions">
-              <button type="button" className="secondary-button" onClick={clearSelection} disabled={!selectedJourneys.length}>Clear</button>
-              <button type="button" onClick={generateStories} disabled={generating || loading || !selectedJourneys.length}>
-                {generating ? 'Generating...' : 'Generate User Stories'}
-              </button>
-            </div>
-          </div>
-
-          {selectedJourneyItems.length ? (
-            <div className="workflow-minimal-chips" aria-label="Selected journeys">
-              {selectedJourneyItems.map((journey) => (
-                <button key={journey.journey_id} type="button" onClick={() => removeSelectedJourney(journey.journey_id)} title="Remove journey">
-                  <span>{getJourneyLabel(journey)}</span><strong aria-hidden="true">×</strong>
-                </button>
-              ))}
-            </div>
-          ) : <p className="workflow-minimal-hint">Select a journey map to view or generate its user stories.</p>}
-
-          {message ? <div className="workflow-minimal-message"><Badge tone={message.toLowerCase().includes('unable') || message.toLowerCase().includes('failed') ? 'danger' : 'success'}>{message}</Badge></div> : null}
+    <section className="user-stories-simple">
+      <header className="user-stories-simple-header">
+        <div>
+          <span className="eyebrow">Stage 2 · User Stories</span>
+          <h2>User Stories</h2>
+          <p>Select a journey map to review or generate its user stories.</p>
         </div>
+        <label className="user-stories-journey-select">
+          <span>Journey map</span>
+          <select
+            value={journeySelectionValue}
+            onChange={(event) => {
+              const journeyId = event.target.value
+              setSelectedJourneys(journeyId === '__all__' ? journeys.map((journey) => journey.journey_id) : (journeyId ? [journeyId] : []))
+            }}
+            disabled={!journeys.length}
+          >
+            <option value="">{journeys.length ? 'Select a journey map' : 'No journey maps available'}</option>
+            {journeys.length > 1 ? <option value="__all__">Select All Journey Maps</option> : null}
+            {journeys.map((journey) => <option key={journey.journey_id} value={journey.journey_id}>{getJourneyLabel(journey)}</option>)}
+          </select>
+        </label>
+      </header>
 
-        {selectedJourneys.length ? (
-          <div className="workflow-minimal-workspace">
-            <div className="workflow-minimal-heading">
-              <div>
-                <h3>Generated user stories</h3>
-                <p>All stories from the selected journeys are shown together. Journey and generation context remain visible on every row.</p>
-              </div>
-              <div className="workflow-minimal-heading-actions">
-                <Badge tone={selectedStories.length ? 'success' : 'neutral'}>{selectedStories.length} stories</Badge>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={refreshStoriesFromJira}
-                  disabled={refreshingJira || !jiraLinkedSelectedStories.length}
-                >
-                  {refreshingJira ? 'Refreshing Jira...' : 'Refresh from Jira'}
-                </button>
-              </div>
+      {message ? <div className="user-stories-message"><Badge tone={message.toLowerCase().includes('unable') || message.toLowerCase().includes('failed') ? 'danger' : 'success'}>{message}</Badge></div> : null}
+
+      {selectedJourney ? (
+        <section className="user-stories-table-section">
+          <div className="user-stories-table-heading">
+            <div>
+              <h3>{selectedStories.length} User {selectedStories.length === 1 ? 'Story' : 'Stories'}</h3>
+              <span>{selectedJourneyLabel}</span>
             </div>
-
-            {selectedStories.length ? (
-              <Table
-                columns={['Story', 'Journey', 'Source', 'Epic', 'Module / Component', 'Jira', 'Action']}
-                rows={selectedStories.map((item) => {
-                  const journey = journeys.find((candidate) => candidate.journey_id === item.journey_id)
-                  return (
-                    <tr key={item.story_id}>
-                      <td><strong>{item.summary}</strong></td>
-                      <td><strong>{getJourneyLabel(journey)}</strong></td>
-                      <td><Badge tone={generationSourceTone(item)}>{generationSourceLabel(item)}</Badge></td>
-                      <td>{item.epic || '-'}</td>
-                      <td><strong>{item.module || '-'}</strong><small>{item.component || '-'}</small></td>
-                      <td>
-                        {item.jira_url ? (
-                          <div className="jira-story-state">
-                            <a className="jira-story-link" href={item.jira_url} target="_blank" rel="noreferrer">{item.jira_key || 'Open in Jira'}</a>
-                            <small>{jiraRefreshLabel(item)}</small>
-                            {jiraRefreshTime(item) && <small>{jiraRefreshTime(item)}</small>}
-                          </div>
-                        ) : <Badge tone="neutral">Local</Badge>}
-                      </td>
-                      <td>
-                        <button type="button" className="table-danger-button" onClick={() => deleteStory(item.story_id)} disabled={deletingStoryId === item.story_id}>
-                          {deletingStoryId === item.story_id ? 'Deleting...' : 'Delete'}
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              />
-            ) : (
-              <div className="workflow-minimal-empty">
-                <strong>No user stories exist for the selected journeys.</strong>
-                <span>Use Generate User Stories above to create and save them.</span>
+            <div className="user-stories-table-actions">
+              <div className="user-stories-jira-refresh">
+                <button type="button" className="secondary-button utility-action" onClick={refreshStoriesFromJira} disabled={refreshingJira || !jiraLinkedSelectedStories.length} title="Fetch the latest story updates from Jira">
+                  <span className={refreshingJira ? 'refresh-icon spinning' : 'refresh-icon'} aria-hidden="true">↻</span>
+                  {refreshingJira ? 'Refreshing...' : 'Refresh from Jira'}
+                </button>
+                <small>{latestJiraRefresh}</small>
               </div>
-            )}
+              {!selectedStories.length ? (
+                <button type="button" onClick={generateStories} disabled={generating || loading}>
+                  {generating ? 'Generating...' : 'Generate User Stories'}
+                </button>
+              ) : null}
+            </div>
           </div>
-        ) : (
-          <div className="workflow-minimal-empty workflow-minimal-start">
-            <strong>Select a journey map to begin.</strong>
-            <span>Its generated user stories will appear in one consolidated table.</span>
-          </div>
-        )}
-      </div>
-    </Card>
+          {selectedStories.length ? (
+            <div className="user-stories-table-wrap">
+              <table className="user-stories-table">
+                <thead><tr><th>User Story</th><th>Journey</th><th>Epic</th><th>Jira</th><th>Action</th></tr></thead>
+                <tbody>
+                  {selectedStories.map((item) => {
+                    const storyJourney = journeys.find((journey) => journey.journey_id === item.journey_id)
+                    return (
+                      <tr key={item.story_id}>
+                        <td><strong>{item.summary}</strong></td>
+                        <td>{getJourneyLabel(storyJourney)}</td>
+                        <td><span className="user-story-category">{item.epic || 'User Journey'}</span></td>
+                        <td>
+                          {item.jira_url ? (
+                            <div className="jira-story-state">
+                              <a className="jira-story-link" href={item.jira_url} target="_blank" rel="noreferrer">{item.jira_key || 'Open in Jira'}</a>
+                              {jiraRefreshTime(item) ? <small>{jiraRefreshTime(item)}</small> : null}
+                            </div>
+                          ) : <span className="user-story-local">Local</span>}
+                        </td>
+                        <td>
+                          <button type="button" className="user-story-delete" onClick={() => deleteStory(item.story_id)} disabled={deletingStoryId === item.story_id}>
+                            {deletingStoryId === item.story_id ? 'Deleting...' : 'Delete'}
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="user-stories-simple-empty">No user stories yet. Generate stories for this journey map.</div>
+          )}
+        </section>
+      ) : <div className="user-stories-simple-start">Select a journey map to display its user stories.</div>}
+
+      <footer className="workflow-fixed-footer user-stories-fixed-footer">
+        <div className="workflow-fixed-stage"><strong>Stage 2 of 5</strong><span>&bull;</span><span>{selectedJourneyLabel}</span></div>
+        <div className="workflow-fixed-actions">
+          <button type="button" className="secondary-button" onClick={() => navigate(selectedJourney && !allJourneysSelected ? `/journeys/${encodeURIComponent(selectedJourney.journey_id)}` : '/workflow')}>{allJourneysSelected ? 'Back to Journeys' : 'Back to Journey'}</button>
+          <button
+            type="button"
+            onClick={() => navigate(allJourneysSelected
+              ? `/tests?journeys=${encodeURIComponent(selectedJourneys.join(','))}`
+              : `/tests?journey=${encodeURIComponent(selectedJourneys[0] || '')}`)}
+            disabled={!selectedStories.length}
+          >Continue to Test Cases <span aria-hidden="true">&rarr;</span></button>
+        </div>
+      </footer>
+    </section>
   )
 }

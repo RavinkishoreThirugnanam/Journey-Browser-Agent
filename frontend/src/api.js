@@ -55,8 +55,16 @@ export const api = {
   getTestScripts: () => request('/test-scripts'),
   downloadTestScriptArtifact: (scriptId, format, filename) => download(`/test-scripts/${scriptId}/download/${format}`, filename),
   downloadTestScripts: () => download('/test-scripts/download', 'test_scripts.json'),
-  exportArtifact: (artifactType, options = {}) => request(`/export/${artifactType}?preview=true`, options),
-  downloadArtifact: (artifactType) => download(`/export/${artifactType}/download`, `${artifactType}.json`),
+  exportArtifact: (artifactType, journeyIds = [], options = {}) => request(`/export/${artifactType}?preview=true&journey_ids=${encodeURIComponent(journeyIds.join(','))}`, options),
+  downloadArtifact: (artifactType, journeyIds = []) => {
+    const filenames = {
+      'user-stories': 'user_stories.csv',
+      'test-cases': 'test_cases.csv',
+      'test-scripts': 'test_scripts_feature_and_js.zip',
+      'complete-package': 'qa_complete_package.xlsx',
+    }
+    return download(`/export/${artifactType}/download?journey_ids=${encodeURIComponent(journeyIds.join(','))}`, filenames[artifactType] || `${artifactType}.json`)
+  },
   runPipeline: (payload) => request('/pipeline/run-all', { method: 'POST', body: JSON.stringify(payload ?? {}) }),
   runReporting: (payload) => request('/reporting/run', { method: 'POST', body: JSON.stringify(payload) }),
   runSummary: (payload) => request('/summary/run', { method: 'POST', body: JSON.stringify(payload ?? {}) }),

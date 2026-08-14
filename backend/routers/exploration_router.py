@@ -3,6 +3,7 @@
 from schemas.exploration_schema import ExplorationRequest, ExplorationResponse
 from services.browser_agent_service import explore_application
 from services.journey_map_service import save_journey
+from services.live_event_service import publish_event
 from routers.configuration_router import _read as read_configuration
 
 router = APIRouter()
@@ -14,10 +15,18 @@ def start_exploration(payload: ExplorationRequest):
         application_url = str(payload.application_url) if payload.application_url else ''
         if not application_url or application_url == 'None':
             application_url = read_configuration().get('application', {}).get('base_url', '')
-        exploration = explore_application(application_url, payload.parameters, payload.crawl.model_dump(), payload.objective)
+        exploration = explore_application(application_url, payload.parameters, payload.crawl.model_dump(), payload.objective, stream_key=payload.stream_key)
         save_journey(exploration)
         first_journey_id = exploration.journeys[0].journey_id if exploration.journeys else ''
         first_journey = exploration.journeys[0] if exploration.journeys else None
+        publish_event(payload.stream_key or first_journey_id or application_url, {
+            'type': 'journey_saved',
+            'status': 'Journey map ready',
+            'url': application_url,
+            'journey_id': first_journey_id,
+            'page_count': len(first_journey.steps) if first_journey else 0,
+            'interaction_count': sum(len(step.interactions) for step in first_journey.steps) if first_journey else 0,
+        })
         return ExplorationResponse(
             message='Exploration completed' if first_journey and first_journey.outcome == 'Exploration Complete' else 'Exploration blocked',
             journey_id=first_journey_id,
@@ -27,6 +36,12 @@ def start_exploration(payload: ExplorationRequest):
             exploration_metadata=exploration.exploration_metadata.model_dump(),
         )
     except Exception as exc:
+        if payload.stream_key:
+            publish_event(payload.stream_key, {
+                'type': 'exploration_failed',
+                'status': 'Journey creation failed',
+                'result': f'{type(exc).__name__}: {exc}',
+            })
         raise HTTPException(status_code=500, detail=f'Exploration failed: {exc}') from exc
 
 

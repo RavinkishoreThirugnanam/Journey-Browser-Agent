@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse
 from schemas.journey_schema import JourneyBulkDeleteRequest, JourneyDetailResponse, JourneyVisualizeRequest, JourneyVisualizeResponse
 from services.artifact_file_service import write_text_file, unique_filename
 from services.journey_map_service import cleanup_orphan_artifacts, clear_journeys, delete_journey, delete_journeys, get_journey, list_journeys, list_journey_summaries
-from services.mermaid_agent_service import journey_to_mermaid
+from services.mermaid_agent_service import journey_to_mermaid, journeys_to_mermaid
 
 router = APIRouter()
 
@@ -116,10 +116,39 @@ def journey_detail(journey_id: str, include_evidence: bool = True):
 
 @router.post('/journeys/visualize', response_model=JourneyVisualizeResponse)
 def visualize(payload: JourneyVisualizeRequest):
-    journey = get_journey(payload.journey_id)
-    if not journey:
-        raise HTTPException(status_code=404, detail='Journey not found')
-    return JourneyVisualizeResponse(journey_id=payload.journey_id, mermaid=journey_to_mermaid(journey))
+    requested_ids = payload.journey_ids if payload.mode == 'consolidated' or payload.journey_ids else [payload.journey_id]
+    journey_ids = list(dict.fromkeys(journey_id.strip() for journey_id in requested_ids if journey_id.strip()))
+    if not journey_ids:
+        raise HTTPException(status_code=422, detail='Select at least one journey to visualize')
+    if len(journey_ids) > 25:
+        raise HTTPException(status_code=422, detail='A consolidated map supports up to 25 journeys')
+
+    journeys = []
+    for journey_id in journey_ids:
+        journey = get_journey(journey_id)
+        if not journey:
+            raise HTTPException(status_code=404, detail=f'Journey not found: {journey_id}')
+        journeys.append(journey)
+
+    consolidated = payload.mode == 'consolidated' or bool(payload.journey_ids)
+    if consolidated:
+        root_feature = payload.root_feature.strip() or 'Consolidated Journey Map'
+        mermaid = journeys_to_mermaid(journeys, root_feature)
+        return JourneyVisualizeResponse(
+            journey_id=journey_ids[0],
+            journey_ids=journey_ids,
+            root_feature=root_feature,
+            mode='consolidated',
+            branch_count=len(journeys),
+            mermaid=mermaid,
+        )
+
+    return JourneyVisualizeResponse(
+        journey_id=journey_ids[0],
+        journey_ids=journey_ids,
+        branch_count=1,
+        mermaid=journey_to_mermaid(journeys[0]),
+    )
 
 
 @router.get('/journeys/{journey_id}/mermaid/download')

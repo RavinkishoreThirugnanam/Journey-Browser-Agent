@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { Badge, Card, Table } from '../components/Ui'
 import { renderMermaid } from '../utils/mermaid'
@@ -221,13 +222,21 @@ function chronologicalJourneyInteractions(steps) {
   })
 }
 const detailTabs = [
-  { id: 'journey-detail', label: 'Journey Details' },
-  { id: 'visualization', label: 'Journey Visualization' },
-  { id: 'live-browser', label: 'Live Browser Session' },
+  { id: 'live-browser', label: 'Live Browser' },
+  { id: 'journey-detail', label: 'Summary' },
+  { id: 'visualization', label: 'Flowchart' },
   { id: 'flow-details', label: 'Page Evidence' },
 ]
 
-export function JourneyPage({ refreshKey = 0, initialSelectedId = '', showJourneyList = true } = {}) {
+function formatActivityTime(value) {
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return '--:--:--'
+  return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+}
+
+export function JourneyPage({ refreshKey = 0, initialSelectedId = '', showJourneyList = true, onCreateJourney = null } = {}) {
+  const navigate = useNavigate()
+  const { journeyId: routeJourneyId = '' } = useParams()
   const [data, setData] = useState([])
   const [selected, setSelected] = useState('')
   const [selectedForDelete, setSelectedForDelete] = useState([])
@@ -238,7 +247,7 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '', showJourne
   const [mermaidText, setMermaidText] = useState('')
   const [svg, setSvg] = useState('')
   const [vizLoading, setVizLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState('journey-detail')
+  const [activeTab, setActiveTab] = useState('visualization')
   const [liveStatus, setLiveStatus] = useState('')
   const [liveEvents, setLiveEvents] = useState([])
   const [replayEvents, setReplayEvents] = useState([])
@@ -247,6 +256,7 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '', showJourne
   const [openEvidencePages, setOpenEvidencePages] = useState({})
   const [evidenceJourneyId, setEvidenceJourneyId] = useState('')
   const [evidenceLoading, setEvidenceLoading] = useState(false)
+  const [manageMode, setManageMode] = useState(false)
   const detailRef = useRef(null)
   const liveTimelineRef = useRef(null)
   const selectedRef = useRef('')
@@ -291,10 +301,15 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '', showJourne
   }, [activeTab, detail?.journey_id, selected, vizJourneyId, svg, vizLoading])
 
   useEffect(() => {
-    if (initialSelectedId) setSelected(initialSelectedId)
-  }, [initialSelectedId])
+    const requestedId = routeJourneyId || initialSelectedId
+    if (requestedId) setSelected(requestedId)
+  }, [initialSelectedId, routeJourneyId])
 
   useEffect(() => {
+    if (showJourneyList) {
+      setDetail(null)
+      return
+    }
     if (!selected) {
       setDetail(null)
       return
@@ -302,14 +317,14 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '', showJourne
     api.getJourney(selected, false).then((result) => {
       if (selectedRef.current !== selected) return
       setDetail(result)
-      setActiveTab('journey-detail')
+      setActiveTab(showJourneyList ? 'journey-detail' : 'visualization')
       requestAnimationFrame(() => {
         detailRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' })
       })
     }).catch(() => {
       if (selectedRef.current === selected) setDetail(null)
     })
-  }, [selected])
+  }, [selected, showJourneyList])
 
   useEffect(() => {
     if (activeTab !== 'flow-details' || !selected || evidenceJourneyId === selected || evidenceLoading) return
@@ -381,7 +396,6 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '', showJourne
       setMermaidText(result.mermaid)
       setSvg(svgMarkup)
       setActiveTab('visualization')
-      setMessage('Journey visualization generated.')
       requestAnimationFrame(() => {
         detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
@@ -588,37 +602,31 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '', showJourne
   const rows = data.map((j) => (
     <tr
       key={j.journey_id}
-      onClick={() => setSelected(j.journey_id)}
-      className={`${selected === j.journey_id ? 'row-selected' : ''} ${selectedForDelete.includes(j.journey_id) ? 'row-marked-for-delete' : ''}`.trim()}
+      onClick={() => manageMode ? toggleJourneyForDelete(j.journey_id) : navigate(`/journeys/${encodeURIComponent(j.journey_id)}`)}
+      className={selectedForDelete.includes(j.journey_id) ? 'row-marked-for-delete' : ''}
     >
-      <td>
+      {manageMode ? <td>
         <input
           type="checkbox"
-          aria-label="Select journey for deletion"
+          aria-label={`Select ${j.journey_title || 'journey'} for deletion`}
           checked={selectedForDelete.includes(j.journey_id)}
           onClick={(event) => event.stopPropagation()}
           onChange={() => toggleJourneyForDelete(j.journey_id)}
         />
+      </td> : null}
+      <td>
+        <strong>{j.journey_title || 'Journey'}</strong>
+        <small className="journey-row-url">{j.starting_url || j.source_url || j.application_url || '-'}</small>
       </td>
-      <td>{j.journey_title || 'Journey'}</td>
-      <td>{j.starting_url || j.source_url || j.application_url || '-'}</td>
+      <td><Badge tone={String(j.outcome || '').toLowerCase().includes('complete') ? 'success' : 'warning'}>{j.outcome || 'Captured'}</Badge></td>
       <td><Badge tone="info">{j.step_count ?? j.steps?.length ?? 0} steps</Badge></td>
       <td><Badge tone="neutral">{j.interaction_count ?? j.events?.length ?? 0} events</Badge></td>
       <td>
-        <button
-          className="secondary-button icon-button danger-button"
-          title="Delete journey"
-          aria-label="Delete journey"
-          onClick={(e) => {
-            e.stopPropagation()
-            handleRowDelete(j.journey_id)
-          }}
-          disabled={loading}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M7 7h10M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7m-7 0 .7 11.2A1.8 1.8 0 0 0 10.5 20h3a1.8 1.8 0 0 0 1.8-1.8L16 7M10 11v5m4-5v5" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-          </svg>
-        </button>
+        {manageMode ? (
+          <button className="secondary-button table-danger-button" onClick={(event) => { event.stopPropagation(); handleRowDelete(j.journey_id) }} disabled={loading}>Delete</button>
+        ) : (
+          <button className="secondary-button" onClick={(event) => { event.stopPropagation(); navigate(`/journeys/${encodeURIComponent(j.journey_id)}`) }}>View Details</button>
+        )}
       </td>
     </tr>
   ))
@@ -699,7 +707,7 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '', showJourne
               <h2>Journey Visualization</h2>
               <p>Auto-generated from the selected journey map.</p>
             </div>
-            <button className="secondary-button" onClick={() => api.downloadMermaid(selected)} disabled={!selected || vizJourneyId !== selected || !svg}>Download `mermaid` file</button>
+            <button className="secondary-button" onClick={() => api.downloadMermaid(selected)} disabled={!selected || vizJourneyId !== selected || !svg}>Download Flowchart</button>
           </div>
           {vizLoading && <div className="empty-state journey-viz-loading">Generating visual representation...</div>}
           {svg ? (
@@ -713,70 +721,85 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '', showJourne
 
     if (activeTab === 'live-browser') {
       const streamUrl = import.meta.env.VITE_BROWSER_STREAM_URL || ''
+      const currentReplayEvent = replayIndex >= 0 ? replayEvents[replayIndex] : latestLiveEvent
+      const currentUrl = currentReplayEvent?.destination_url || currentReplayEvent?.url || detail.starting_url || selectedJourney?.starting_url || '-'
       return (
-        <section className="journey-report journey-report-compact live-browser-panel">
-          <div className="journey-report-header">
-            <div>
-              <p className="journey-report-kicker">Browser Agent Monitor</p>
-              <h2>Live Browser Session</h2>
-              <p>Watch the browser agent navigate the selected application. Structured clicks and navigation evidence remain available in Steps &amp; Interactions.</p>
-            </div>
-            <Badge tone="success">Stream preview</Badge>
-          </div>
-          <div className="live-browser-notice">
-            <strong>Live session preview</strong>
-            <span>If the target blocks direct embedding, the browser stream will still appear here when the noVNC service is running.</span>
-            {liveStatus && <span className="live-browser-status">{liveStatus}</span>}
-          </div>
-          <div className="live-replay-toolbar">
-            <div>
-              <span className="journey-report-kicker">Recorded evidence replay</span>
-              <strong>{replayIndex >= 0 ? `Event ${replayIndex + 1} of ${replayEvents.length}` : 'Review the run from the beginning'}</strong>
-              <small>VNC shows the current browser state. Replay uses the captured journey history.</small>
-            </div>
-            <div className="live-replay-actions">
-              <button type="button" className="secondary-button" onClick={replayCapturedJourney} disabled={!liveActivityEvents.length}>Replay captured journey</button>
-              <button type="button" className="secondary-button" onClick={() => setReplayPlaying((playing) => !playing)} disabled={replayIndex < 0 || replayIndex >= replayEvents.length - 1}>{replayPlaying ? 'Pause' : 'Play'}</button>
-              <button type="button" className="secondary-button" onClick={() => setReplayIndex((index) => Math.max(0, index - 1))} disabled={replayIndex <= 0}>Previous</button>
-              <button type="button" className="secondary-button" onClick={() => setReplayIndex((index) => Math.min(replayEvents.length - 1, index + 1))} disabled={replayIndex < 0 || replayIndex >= replayEvents.length - 1}>Next</button>
-            </div>
-          </div>
-          {replayIndex >= 0 && replayEvents[replayIndex] ? (
-            <div className="live-replay-event">
-              <Badge tone={liveEventTone(replayEvents[replayIndex])}>Recorded event {replayIndex + 1}</Badge>
-              <strong>{replayEvents[replayIndex].element || replayEvents[replayIndex].title || replayEvents[replayIndex].type}</strong>
-              <span>{replayEvents[replayIndex].result || replayEvents[replayIndex].destination_url || replayEvents[replayIndex].url || '-'}</span>
-              <code>{replayEvents[replayIndex].selector || replayEvents[replayIndex].href || '-'}</code>
-            </div>
-          ) : null}
-          <div className="live-browser-frame-wrap">
-            {streamUrl ? (
-              <div className="live-browser-stage">
-              <iframe
-                key={`${selected}-${streamUrl}`}
-                title="Live browser agent session"
-                src={streamUrl}
-                className="live-browser-frame"
-                tabIndex={-1}
-                aria-label="Read-only browser agent stream"
-                onError={() => setMessage('Live browser stream is unavailable. The journey evidence remains available below.')}
-              />
-              <div className="live-browser-readonly-overlay" aria-hidden="true">
-                <span>Agent-controlled session</span>
-                <small>Read-only preview</small>
-                {liveActivityEvents.filter((event) => event.coordinates?.x !== undefined).slice(-8).map((event, index) => (
-                  <span key={`${event.timestamp}-${index}`} className="live-click-marker" style={{ left: `${(event.coordinates.x / 1280) * 100}%`, top: `${(event.coordinates.y / 800) * 100}%` }} title={event.element || event.action || 'Agent interaction'} />
-                ))}
+        <section className="live-browser-panel live-browser-panel-refined">
+          <div className="live-browser-workspace">
+            <div className="live-browser-column">
+              <div className="live-browser-window">
+                <div className="live-browser-chrome">
+                  <div className="browser-window-dots" aria-hidden="true"><span /><span /><span /></div>
+                  <div className="live-browser-address">{currentUrl}</div>
+                </div>
+                <div className="live-browser-frame-wrap">
+                  {streamUrl ? (
+                    <div className="live-browser-stage">
+                      <iframe
+                        key={`${selected}-${streamUrl}`}
+                        title="Live browser agent session"
+                        src={streamUrl}
+                        className="live-browser-frame"
+                        tabIndex={-1}
+                        aria-label="Read-only browser agent stream"
+                        onError={() => setMessage('Live browser stream is unavailable. The journey evidence remains available below.')}
+                      />
+                      <div className="live-browser-readonly-overlay" aria-hidden="true">
+                        <span>Agent controlled</span>
+                        {liveActivityEvents.filter((event) => event.coordinates?.x !== undefined).slice(-8).map((event, index) => (
+                          <span key={`${event.timestamp}-${index}`} className="live-click-marker" style={{ left: `${(event.coordinates.x / 1280) * 100}%`, top: `${(event.coordinates.y / 800) * 100}%` }} title={event.element || event.action || 'Agent interaction'} />
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="live-browser-unavailable">
+                      <strong>Live browser stream is not configured</strong>
+                      <span>Start the headed browser and noVNC stream, then set <code>VITE_BROWSER_STREAM_URL</code> to its browser URL.</span>
+                    </div>
+                  )}
+                </div>
               </div>
+              <div className="live-browser-controls">
+                <Badge tone={replayPlaying ? 'success' : 'neutral'}>{replayPlaying ? 'Playing' : 'Ready'}</Badge>
+                <button type="button" className="secondary-button" onClick={replayCapturedJourney} disabled={!liveActivityEvents.length}>↻ Restart replay</button>
+                <button type="button" className="secondary-button" onClick={() => setReplayPlaying((playing) => !playing)} disabled={replayIndex < 0 || replayIndex >= replayEvents.length - 1}>{replayPlaying ? 'Ⅱ Pause' : '▷ Play'}</button>
+                <button type="button" className="secondary-button live-step-button" onClick={() => setReplayIndex((index) => Math.max(0, index - 1))} disabled={replayIndex <= 0}>Previous</button>
+                <button type="button" className="secondary-button live-step-button" onClick={() => setReplayIndex((index) => Math.min(replayEvents.length - 1, index + 1))} disabled={replayIndex < 0 || replayIndex >= replayEvents.length - 1}>Next</button>
               </div>
-            ) : (
-              <div className="live-browser-unavailable">
-                <strong>Live browser stream is not configured</strong>
-                <span>Start the headed browser and noVNC stream, then set <code>VITE_BROWSER_STREAM_URL</code> to its browser URL.</span>
+            </div>
+
+            <aside className="live-activity-card">
+              <div className="live-activity-current">
+                <span className="live-activity-pulse" />
+                <div>
+                  <h2>{currentReplayEvent?.element || currentReplayEvent?.title || currentReplayEvent?.status || 'Waiting for browser activity'}</h2>
+                  <p>{replayIndex >= 0 ? `Step ${replayIndex + 1} of ${replayEvents.length}` : `${liveActivityEvents.length} captured events`} · {currentReplayEvent?.result || liveStatus || 'Browser agent session ready'}</p>
+                </div>
               </div>
-            )}
+              <div className="live-activity-divider" />
+              <div className="live-activity-heading">
+                <span>Activity Log</span>
+                <Badge tone={liveActivityEvents.length ? 'success' : 'neutral'}>{liveActivityEvents.length}</Badge>
+              </div>
+              <div ref={liveTimelineRef} className="live-activity-list" aria-label="Live browser event timeline">
+                {liveActivityEvents.length ? liveActivityEvents.map((event, index) => {
+                  const isCurrent = replayIndex === index
+                  return (
+                    <div className={`live-activity-item ${isCurrent ? 'current' : ''}`} key={`${event.timestamp}-${index}`}>
+                      <span className="live-activity-dot" />
+                      <div>
+                        <strong>{event.element || event.title || event.status || event.type}</strong>
+                        <small>{event.result || event.destination_url || event.expected_destination || event.url || '-'}</small>
+                      </div>
+                      <time>{formatActivityTime(event.timestamp)}</time>
+                    </div>
+                  )
+                }) : <div className="live-activity-empty">Start exploration to observe browser-agent activity.</div>}
+              </div>
+            </aside>
           </div>
-          <div className="live-browser-observability-grid live-browser-observability-grid-rich">
+
+          <div className="live-browser-observability-grid live-browser-observability-grid-rich live-browser-diagnostics">
             <div className="live-browser-current-state">
               <span className="journey-report-kicker">Agent state</span>
               <strong>{latestLiveEvent?.status || liveStatus || 'Waiting for activity'}</strong>
@@ -795,32 +818,6 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '', showJourne
               <span>{lastScanEvent?.visible_elements?.slice(0, 4).map((item) => `${item.type}: ${item.label}`).join(' | ') || 'Visible controls will appear here.'}</span>
               <code>{lastScanEvent?.counts ? JSON.stringify(lastScanEvent.counts) : '-'}</code>
             </div>
-          </div>
-          <div className="live-browser-timeline-shell">
-            <div className="journey-report-header compact-header">
-              <div>
-                <h3>Live Agent Activity</h3>
-                <p>Click, navigation, page scan, and target-selection events streamed from the backend.</p>
-              </div>
-              <Badge tone={liveActivityEvents.length ? 'success' : 'neutral'}>{liveActivityEvents.length} events</Badge>
-            </div>
-            <div ref={liveTimelineRef} className="live-browser-timeline" aria-label="Live browser event timeline">
-              {liveActivityEvents.length ? liveActivityEvents.map((event, index) => (
-                <div className="live-browser-timeline-item live-browser-timeline-item-rich" key={`${event.timestamp}-${index}`}>
-                  <Badge tone={liveEventTone(event)}>{event.status || event.type}</Badge>
-                  <div>
-                    <strong>{event.element || event.title || event.type}</strong>
-                    <span>{event.result || event.destination_url || event.expected_destination || event.url || '-'}</span>
-                    <small>{event.selector || event.href || event.cdp_url || ''}</small>
-                  </div>
-                  {event.coordinates?.x !== undefined ? <span className="live-coordinate-pill">x {Math.round(event.coordinates.x)}, y {Math.round(event.coordinates.y)}</span> : null}
-                </div>
-              )) : <p>No live events received yet. Start the exploration to observe the agent.</p>}
-            </div>
-          </div>
-          <div className="journey-report-meta">
-            <div><span>Starting URL</span><strong>{formatValue(selectedJourney?.starting_url || detail.starting_url)}</strong></div>
-            <div><span>Captured events</span><strong>{detail.events?.length ?? steps.reduce((total, step) => total + (step.interactions?.length ?? 0), 0)}</strong></div>
           </div>
         </section>
       )
@@ -1074,23 +1071,28 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '', showJourne
     return null
   }
 
-  const pageTitle = showJourneyList ? 'Created Journeys' : 'Journey Evidence'
+  const pageTitle = showJourneyList ? '' : (detail?.journey_title || 'Journey Review')
   const pageSubtitle = showJourneyList
-    ? 'Select a created journey map to inspect details, visualization, live replay, and page-focused evidence.'
-    : 'Review the journey created by this workflow, including visualization, replay, and page-focused evidence.'
+    ? ''
+    : 'Review the objective, browser exploration, visualization, replay, and page evidence for this journey.'
 
   return (
     <Card
+      className={showJourneyList ? 'journey-list-flat' : 'journey-review-flat'}
       title={pageTitle}
       subtitle={pageSubtitle}
       actions={showJourneyList ? (
         <>
-          <button onClick={load} disabled={loading}>{loading ? 'Refreshing...' : 'Refresh'}</button>
-          <button className="secondary-button" onClick={deleteJourneys} disabled={loading || !data.length}>Delete all journey discoveries</button>
+          {data.length ? <button onClick={() => onCreateJourney ? onCreateJourney() : navigate('/workflow?create=1')}>Create New Journey</button> : null}
+          <button className="secondary-button" onClick={() => { setManageMode((current) => !current); setSelectedForDelete([]) }} disabled={loading || !data.length}>{manageMode ? 'Done Managing' : 'Manage Journeys'}</button>
+          <button className="secondary-button utility-action" onClick={load} disabled={loading}>
+            <span className={loading ? 'utility-action-icon spinning' : 'utility-action-icon'} aria-hidden="true">&#8635;</span>
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
         </>
       ) : null}
     >
-      {showJourneyList ? <div className="journey-selection-toolbar">
+      {showJourneyList && manageMode ? <div className="journey-selection-toolbar">
         <label className="journey-select-all">
           <input
             type="checkbox"
@@ -1109,29 +1111,52 @@ export function JourneyPage({ refreshKey = 0, initialSelectedId = '', showJourne
         >
           Delete selected
         </button>
+        <button type="button" className="secondary-button" onClick={deleteJourneys} disabled={loading || !data.length}>Delete All Journeys</button>
       </div> : null}
-      {showJourneyList ? <Table columns={['Select for deletion', 'Journey', 'Source URL', 'Steps', 'Events', 'Action']} rows={rows} /> : null}
+      {showJourneyList && data.length ? <Table columns={manageMode ? ['Select for deletion', 'Journey', 'Status', 'Steps', 'Events', 'Action'] : ['Journey', 'Status', 'Steps', 'Events', 'Action']} rows={rows} /> : null}
+      {showJourneyList && !loading && !data.length ? (
+        <div className="journey-onboarding-empty">
+          <span className="eyebrow">Get started</span>
+          <h3>No journeys created yet</h3>
+          <p>Describe what you want the browser agent to explore and create your first journey.</p>
+          <button type="button" onClick={() => onCreateJourney ? onCreateJourney() : navigate('/workflow?create=1')}>Create Your First Journey</button>
+        </div>
+      ) : null}
       <div className="inline-actions">
         {message && <div className="notification-row"><Badge tone={message.includes('deleted') ? 'danger' : 'warning'}>{message}</Badge></div>}
       </div>
 
-      {detail && (
+      {!showJourneyList && detail && (
         <div ref={detailRef} className="detail-tabs-shell">
-          <div className="detail-tabs">
-            {detailTabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                className={`detail-tab ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div className="detail-tabs-navigation">
+            <span className="detail-tabs-label">Views</span>
+            <div className="detail-tabs">
+              {detailTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`detail-tab ${activeTab === tab.id ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="detail-tab-panel">
             {renderActiveTab()}
           </div>
+          {!showJourneyList ? <div className="journey-detail-primary-action journey-detail-primary-action-bottom">
+            <div className="journey-fixed-stage">
+              <strong>Stage 1 of 5</strong>
+              <span aria-hidden="true">•</span>
+              <span>{detail.journey_title || selectedJourney?.journey_title || 'Journey review'}</span>
+            </div>
+            <div className="journey-fixed-footer-actions">
+              <button type="button" className="secondary-button" onClick={() => navigate('/workflow')}>Back to Journeys</button>
+              <button type="button" onClick={() => navigate(`/stories?journey=${encodeURIComponent(selected)}`)}>Continue to User Stories <span aria-hidden="true">→</span></button>
+            </div>
+          </div> : null}
         </div>
       )}
     </Card>
